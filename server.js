@@ -12,10 +12,10 @@ app.use(express.json());
 
 // Koneksi ke MySQL dengan mysql2/promise
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || "172.18.72.36",
-  user: process.env.DB_USER || "admin",
-  password: process.env.DB_PASS || "dmdhapp123#",
-  database: process.env.DB_NAME || "dmdh_app",
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER ,
+  password: process.env.DB_PASS ,
+  database: process.env.DB_NAME,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
@@ -32,6 +32,6 @@ app.get("/api/users", async (req, res) => {
 });
 
 // Jalankan server
-app.listen(port, () => {
+app.listen(port, "0.0.0.0", () => {
   console.log(`Server running on http://0.0.0.0:${port}`);
 });
