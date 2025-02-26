@@ -225,11 +225,11 @@ app.post("/jadwal-ngajar", async (req, res) => {
 });
 
 // Endpoint untuk mendapatkan data absensi berdasarkan kelas_id, tanggal, dan waktu_id
-app.get('/api/absensi-harian', async (req, res) => {
+app.post('/api/absensi-harian', async (req, res) => {
   try {
-    const { kelasId, tanggal, waktuId } = req.body;
+    const { kelas_id, tanggal, waktu_id } = req.body; // Gunakan req.body untuk POST request
 
-    if (!kelasId || !tanggal || !waktuId) {
+    if (!kelas_id || !tanggal || !waktu_id) {
       return res.status(400).json({ message: 'kelas_id, tanggal, dan waktu_id diperlukan' });
     }
 
@@ -248,13 +248,14 @@ app.get('/api/absensi-harian', async (req, res) => {
         AND DATE(absensi.tanggal) = ? 
         AND absensi.waktu_id = ?`;
 
-    const [rows] = await pool.query(sql, [kelasId, tanggal, waktuId]);
+    const [rows] = await pool.query(sql, [kelas_id, tanggal, waktu_id]);
     res.json(rows);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Terjadi kesalahan pada server' });
   }
 });
+
 
 
 // Endpoint untuk mendapatkan semua user
