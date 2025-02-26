@@ -31,31 +31,58 @@ app.post("/login", async (req, res) => {
   }
 
   try {
-    // Cek user di database
-    const [userRows] = await pool.query(
-      "SELECT * FROM users WHERE username = ? AND password = ?",
-      [username, password]
-    );
+    // Cek apakah user ada di database
+    const [userRows] = await pool.query("SELECT * FROM users WHERE username = ? AND password = ?", [username, password]);
 
     if (userRows.length === 0) {
       return res.status(401).json({ error: "Username atau password salah" });
     }
 
-    const user = userRows[0];
+    const user = userRows[0]; // Dapatkan data user
+    const user_id = user.id;
 
-    // Cek apakah user adalah guru
-    const [guruRows] = await pool.query(
-      "SELECT * FROM guru WHERE user_id = ?",
-      [user.id]
-    );
+    // Cek apakah user ini adalah seorang guru
+    const [guruRows] = await pool.query("SELECT id FROM guru WHERE user_id = ?", [user_id]);
 
-    const guru = guruRows.length > 0 ? guruRows[0] : null;
+    if (guruRows.length === 0) {
+      return res.status(403).json({ error: "User ini bukan seorang guru" });
+    }
 
-    res.json({ message: "Login berhasil", user, guru });
+    const guru_id = guruRows[0].id;
+
+    // Ambil jadwal_ngajar berdasarkan guru_id
+    const [jadwalRows] = await pool.query(`
+      SELECT 
+        j.id AS jadwal_id,
+        g.nama AS guru_nama,
+        k.nama AS kelas_nama,
+        w.nama AS waktu_nama,
+        j.mata_pelajaran,
+        j.hari,
+        j.jam_mulai,
+        j.jam_selesai
+      FROM jadwal_ngajar j
+      JOIN guru g ON j.guru_id = g.id
+      JOIN kelas k ON j.kelas_id = k.id
+      JOIN waktu w ON j.waktu_id = w.id
+      WHERE j.guru_id = ?
+    `, [guru_id]);
+
+    res.json({
+      message: "Login berhasil",
+      user: {
+        id: user_id,
+        username: user.username,
+        guru_id: guru_id
+      },
+      jadwal_ngajar: jadwalRows
+    });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // **1️⃣ API Daftar User**
 app.post("/register", async (req, res) => {
