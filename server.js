@@ -56,7 +56,7 @@ app.post("/login", async (req, res) => {
         j.id AS jadwal_id,
         g.nama AS guru_nama,
         k.nama AS kelas_nama,
-        w.nama AS waktu_nama,
+        w.nama AS waktu_nama
       FROM jadwal_ngajar j
       JOIN guru g ON j.guru_id = g.id
       JOIN kelas k ON j.kelas_id = k.id
