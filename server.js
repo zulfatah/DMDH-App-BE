@@ -142,21 +142,28 @@ app.post("/register/bulk", async (req, res) => {
 
 // **2️⃣ API Reset Password**
 app.post("/reset-password", async (req, res) => {
-  const { username, password_baru } = req.body;
+  const { username, password_lama, password_baru } = req.body;
 
-  if (!username || !password_baru) {
-    return res.status(400).json({ error: "Username dan password baru wajib diisi" });
+  if (!username || !password_lama || !password_baru) {
+    return res.status(400).json({ error: "Username, password lama, dan password baru wajib diisi" });
   }
 
   try {
-    // Cek apakah user ada
+    // 1️⃣ Cek apakah user ada
     const [userRows] = await pool.query("SELECT * FROM users WHERE username = ?", [username]);
 
     if (userRows.length === 0) {
       return res.status(404).json({ error: "User tidak ditemukan" });
     }
 
-    // Update password user
+    const user = userRows[0];
+
+    // 2️⃣ Cek apakah password lama sesuai
+    if (user.password !== password_lama) {
+      return res.status(401).json({ error: "Password lama salah" });
+    }
+
+    // 3️⃣ Update password user
     await pool.query("UPDATE users SET password = ? WHERE username = ?", [password_baru, username]);
 
     res.json({ message: "Password berhasil direset" });
@@ -164,6 +171,7 @@ app.post("/reset-password", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 // Endpoint untuk mendapatkan semua user
