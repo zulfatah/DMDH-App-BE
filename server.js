@@ -3,6 +3,7 @@ const express = require("express");
 const mysql = require("mysql2/promise"); // Gunakan mysql2 dengan async/await
 const cors = require("cors");
 
+
 const app = express();
 const port = process.env.PORT || 3002;
 
@@ -20,6 +21,102 @@ const pool = mysql.createPool({
   connectionLimit: 10,
   queueLimit: 0,
 });
+
+// **1️⃣ API Login**
+app.post("/login", async (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({ error: "Username dan password wajib diisi" });
+  }
+
+  try {
+    // Cek user di database
+    const [userRows] = await pool.query(
+      "SELECT * FROM users WHERE username = ? AND password = ?",
+      [username, password]
+    );
+
+    if (userRows.length === 0) {
+      return res.status(401).json({ error: "Username atau password salah" });
+    }
+
+    const user = userRows[0];
+
+    // Cek apakah user adalah guru
+    const [guruRows] = await pool.query(
+      "SELECT * FROM guru WHERE user_id = ?",
+      [user.id]
+    );
+
+    const guru = guruRows.length > 0 ? guruRows[0] : null;
+
+    res.json({ message: "Login berhasil", user, guru });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// **1️⃣ API Daftar User**
+app.post("/register", async (req, res) => {
+  const { username, password, isGuru, namaGuru } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({ error: "Username dan password wajib diisi" });
+  }
+
+  try {
+    // Cek apakah username sudah ada
+    const [existingUsers] = await pool.query("SELECT id FROM users WHERE username = ?", [username]);
+
+    if (existingUsers.length > 0) {
+      return res.status(400).json({ error: "Username sudah digunakan" });
+    }
+
+    // Insert user baru ke tabel users
+    const [userResult] = await pool.query(
+      "INSERT INTO users (username, password) VALUES (?, ?)",
+      [username, password]
+    );
+
+    const userId = userResult.insertId; // ID user yang baru dibuat
+
+    // Jika user juga seorang guru, tambahkan ke tabel guru
+    if (isGuru && namaGuru) {
+      await pool.query("INSERT INTO guru (nama, user_id) VALUES (?, ?)", [namaGuru, userId]);
+    }
+
+    res.status(201).json({ message: "Pendaftaran berhasil", user_id: userId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// **2️⃣ API Reset Password**
+app.post("/reset-password", async (req, res) => {
+  const { username, password_baru } = req.body;
+
+  if (!username || !password_baru) {
+    return res.status(400).json({ error: "Username dan password baru wajib diisi" });
+  }
+
+  try {
+    // Cek apakah user ada
+    const [userRows] = await pool.query("SELECT * FROM users WHERE username = ?", [username]);
+
+    if (userRows.length === 0) {
+      return res.status(404).json({ error: "User tidak ditemukan" });
+    }
+
+    // Update password user
+    await pool.query("UPDATE users SET password = ? WHERE username = ?", [password_baru, username]);
+
+    res.json({ message: "Password berhasil direset" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // Endpoint untuk mendapatkan semua user
 app.get("/api/users", async (req, res) => {
