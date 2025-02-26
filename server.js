@@ -51,18 +51,23 @@ app.post("/login", async (req, res) => {
     const guru_id = guruRows[0].id;
 
     // Ambil jadwal_ngajar berdasarkan guru_id
-    const [jadwalRows] = await pool.query(`
-      SELECT 
-        j.id AS jadwal_id,
-        g.nama AS guru_nama,
-        k.nama AS kelas_nama,
-        w.nama AS waktu_nama
-      FROM jadwal_ngajar j
-      JOIN guru g ON j.guru_id = g.id
-      JOIN kelas k ON j.kelas_id = k.id
-      JOIN waktu w ON j.waktu_id = w.id
-      WHERE j.guru_id = ?
-    `, [guru_id]);
+    const [jadwalRows] = await pool.query(
+      `SELECT 
+          j.id AS jadwal_id,
+          j.kelas_id,
+          j.guru_id,
+          j.waktu_id,
+          g.nama AS guru_nama,
+          k.nama AS kelas_nama,
+          w.nama AS waktu_nama
+       FROM jadwal_ngajar j
+       JOIN guru g ON j.guru_id = g.id
+       JOIN kelas k ON j.kelas_id = k.id
+       JOIN waktu w ON j.waktu_id = w.id
+       WHERE j.guru_id = ?`,
+      [guru_id]
+    );
+    
 
     res.json({
       message: "Login berhasil",
@@ -195,6 +200,61 @@ app.post("/reset-password", async (req, res) => {
   }
 });
 
+//menambahkan jadwal ngajar
+
+app.post("/jadwal-ngajar", async (req, res) => {
+  const { guru_id, kelas_id, waktu_id } = req.body;
+
+  // Validasi input tidak boleh kosong
+  if (!guru_id || !kelas_id || !waktu_id) {
+    return res.status(400).json({ error: "Semua field wajib diisi!" });
+  }
+
+  try {
+    // Query untuk menambahkan jadwal ngajar
+    const sql = `INSERT INTO jadwal_ngajar (guru_id, kelas_id, waktu_id) VALUES (?, ?, ?)`;
+    const [result] = await pool.query(sql, [guru_id, kelas_id, waktu_id]);
+
+    res.status(201).json({
+      message: "Jadwal ngajar berhasil ditambahkan!",
+      jadwal_id: result.insertId, // ID dari jadwal yang baru ditambahkan
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Endpoint untuk mendapatkan data absensi berdasarkan kelas_id, tanggal, dan waktu_id
+app.get('/api/absensi-harian', async (req, res) => {
+  try {
+    const { kelasId, tanggal, waktuId } = req.query;
+
+    if (!kelasId || !tanggal || !waktuId) {
+      return res.status(400).json({ message: 'kelas_id, tanggal, dan waktu_id diperlukan' });
+    }
+
+    const sql = `
+      SELECT 
+        absensi.santri_id, 
+        santri.nama, 
+        absensi.hadir, 
+        absensi.izin, 
+        absensi.alpa, 
+        absensi.pulang, 
+        absensi.sakit
+      FROM absensi
+      JOIN santri ON absensi.santri_id = santri.id
+      WHERE absensi.kelas_id = ? 
+        AND DATE(absensi.tanggal) = ? 
+        AND absensi.waktu_id = ?`;
+
+    const [rows] = await pool.query(sql, [kelasId, tanggal, waktuId]);
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+  }
+});
 
 
 // Endpoint untuk mendapatkan semua user
