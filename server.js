@@ -92,6 +92,54 @@ app.post("/register", async (req, res) => {
   }
 });
 
+app.post("/register/bulk", async (req, res) => {
+  const users = req.body.users; // Expect array of users
+
+  if (!Array.isArray(users) || users.length === 0) {
+    return res.status(400).json({ error: "Data users harus berupa array dan tidak boleh kosong" });
+  }
+
+  try {
+    const userValues = [];
+    const guruValues = [];
+
+    for (const user of users) {
+      const { username, password, isGuru, namaGuru } = user;
+
+      if (!username || !password) {
+        return res.status(400).json({ error: "Username dan password wajib diisi untuk setiap user" });
+      }
+
+      // Simpan user ke array
+      userValues.push([username, password]);
+
+      // Jika user juga seorang guru, simpan datanya untuk nanti dimasukkan ke tabel guru
+      if (isGuru && namaGuru) {
+        guruValues.push(namaGuru); // Nama guru sementara disimpan dulu
+      }
+    }
+
+    // Masukkan semua user ke tabel users
+    const [userResults] = await pool.query(
+      "INSERT INTO users (username, password) VALUES ?",
+      [userValues]
+    );
+
+    const insertedUserIds = Array.from({ length: userResults.affectedRows }, (_, i) => userResults.insertId + i);
+
+    // Jika ada guru yang harus dimasukkan
+    if (guruValues.length > 0) {
+      const guruInsertValues = guruValues.map((nama, i) => [nama, insertedUserIds[i]]);
+      await pool.query("INSERT INTO guru (nama, user_id) VALUES ?", [guruInsertValues]);
+    }
+
+    res.status(201).json({ message: `${userResults.affectedRows} user berhasil didaftarkan` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 // **2️⃣ API Reset Password**
 app.post("/reset-password", async (req, res) => {
   const { username, password_baru } = req.body;
