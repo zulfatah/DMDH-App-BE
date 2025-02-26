@@ -31,6 +31,77 @@ app.get("/api/users", async (req, res) => {
   }
 });
 
+// Bulk insert ke tabel Guru
+app.post('/guru', (req, res) => {
+  const guruArray = req.body.guru;
+
+  if (!Array.isArray(guruArray) || guruArray.length === 0) {
+      return res.status(400).json({ error: 'Data guru harus berupa array dan tidak boleh kosong' });
+  }
+
+  const values = guruArray.map(nama => [nama]);
+  const sql = 'INSERT INTO guru (nama) VALUES ?';
+
+  db.query(sql, [values], (err, result) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.status(201).json({ message: `${result.affectedRows} guru berhasil ditambahkan` });
+  });
+});
+
+// Bulk insert ke tabel Santri
+app.post('/santri', (req, res) => {
+  const santriArray = req.body.santri;
+
+  if (!Array.isArray(santriArray) || santriArray.length === 0) {
+      return res.status(400).json({ error: 'Data santri harus berupa array dan tidak boleh kosong' });
+  }
+
+  const values = santriArray.map(nama => [nama]);
+  const sql = 'INSERT INTO santri (nama) VALUES ?';
+
+  db.query(sql, [values], (err, result) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.status(201).json({ message: `${result.affectedRows} santri berhasil ditambahkan` });
+  });
+});
+
+// Bulk insert ke tabel Waktu
+app.post('/waktu', (req, res) => {
+  const waktuArray = req.body.waktu;
+
+  if (!Array.isArray(waktuArray) || waktuArray.length === 0) {
+      return res.status(400).json({ error: 'Data waktu harus berupa array dan tidak boleh kosong' });
+  }
+
+  const values = waktuArray.map(nama => [nama]);
+  const sql = 'INSERT INTO waktu (nama) VALUES ?';
+
+  db.query(sql, [values], (err, result) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.status(201).json({ message: `${result.affectedRows} waktu berhasil ditambahkan` });
+  });
+});
+
+// Bulk insert ke tabel Absensi
+app.post('/absensi', (req, res) => {
+  const absensiArray = req.body.absensi;
+
+  if (!Array.isArray(absensiArray) || absensiArray.length === 0) {
+      return res.status(400).json({ error: 'Data absensi harus berupa array dan tidak boleh kosong' });
+  }
+
+  const values = absensiArray.map(({ tanggal, guru_id, kelas_id, waktu_id, santri_id, hadir, izin, alpa, pulang, sakit }) => 
+      [tanggal, guru_id, kelas_id, waktu_id, santri_id, hadir, izin, alpa, pulang, sakit]
+  );
+
+  const sql = `INSERT INTO absensi (tanggal, guru_id, kelas_id, waktu_id, santri_id, hadir, izin, alpa, pulang, sakit) VALUES ?`;
+
+  db.query(sql, [values], (err, result) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.status(201).json({ message: `${result.affectedRows} absensi berhasil ditambahkan` });
+  });
+});
+
 // Jalankan server
 app.listen(port, "0.0.0.0", () => {
   console.log(`Server running on http://0.0.0.0:${port}`);
