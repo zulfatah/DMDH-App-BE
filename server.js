@@ -227,13 +227,14 @@ app.post("/jadwal-ngajar", async (req, res) => {
 // Endpoint untuk mendapatkan data absensi berdasarkan kelas_id, tanggal, dan waktu_id
 app.post('/api/absensi-harian', async (req, res) => {
   try {
-    const { kelas_id, tanggal, waktu_id } = req.body; // Gunakan req.body untuk POST request
+    const { kelas_id, tanggal, waktu_id } = req.body;
 
     if (!kelas_id || !tanggal || !waktu_id) {
       return res.status(400).json({ message: 'kelas_id, tanggal, dan waktu_id diperlukan' });
     }
 
-    const sql = `
+    // Cek apakah ada data absensi untuk tanggal, kelas, dan waktu tertentu
+    const sqlAbsensi = `
       SELECT 
         absensi.santri_id, 
         santri.nama, 
@@ -248,13 +249,35 @@ app.post('/api/absensi-harian', async (req, res) => {
         AND DATE(absensi.tanggal) = ? 
         AND absensi.waktu_id = ?`;
 
-    const [rows] = await pool.query(sql, [kelas_id, tanggal, waktu_id]);
-    res.json(rows);
+    const [absensiRows] = await pool.query(sqlAbsensi, [kelas_id, tanggal, waktu_id]);
+
+    // Jika data absensi ditemukan, kirim data tersebut
+    if (absensiRows.length > 0) {
+      return res.json(absensiRows);
+    }
+
+    // Jika tidak ada data absensi, ambil daftar santri dari kelas tersebut
+    const sqlSantri = `SELECT id AS santri_id, nama FROM santri WHERE kelas_id = ?`;
+    const [santriRows] = await pool.query(sqlSantri, [kelas_id]);
+
+    // Buat data absensi default (hadir = 0, izin = 0, dsb.)
+    const defaultAbsensi = santriRows.map(santri => ({
+      santri_id: santri.santri_id,
+      nama: santri.nama,
+      hadir: 0,
+      izin: 0,
+      alpa: 0,
+      pulang: 0,
+      sakit: 0
+    }));
+
+    res.json(defaultAbsensi);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Terjadi kesalahan pada server' });
   }
 });
+
 
 
 
