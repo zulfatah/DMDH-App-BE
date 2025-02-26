@@ -227,7 +227,7 @@ app.post("/jadwal-ngajar", async (req, res) => {
 // Endpoint untuk mendapatkan data absensi berdasarkan kelas_id, tanggal, dan waktu_id
 app.get('/api/absensi-harian', async (req, res) => {
   try {
-    const { kelasId, tanggal, waktuId } = req.query;
+    const { kelasId, tanggal, waktuId } = req.body;
 
     if (!kelasId || !tanggal || !waktuId) {
       return res.status(400).json({ message: 'kelas_id, tanggal, dan waktu_id diperlukan' });
