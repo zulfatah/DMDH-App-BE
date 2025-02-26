@@ -45,7 +45,7 @@ app.post("/login", async (req, res) => {
     const [guruRows] = await pool.query("SELECT id FROM guru WHERE user_id = ?", [user_id]);
 
     if (guruRows.length === 0) {
-      return res.status(403).json({ error: "User ini bukan seorang guru" });
+      return res.status(403).json({ error: "User ini bukan seorang guru", user , user_id });
     }
 
     const guru_id = guruRows[0].id;
@@ -57,10 +57,6 @@ app.post("/login", async (req, res) => {
         g.nama AS guru_nama,
         k.nama AS kelas_nama,
         w.nama AS waktu_nama,
-        j.mata_pelajaran,
-        j.hari,
-        j.jam_mulai,
-        j.jam_selesai
       FROM jadwal_ngajar j
       JOIN guru g ON j.guru_id = g.id
       JOIN kelas k ON j.kelas_id = k.id
