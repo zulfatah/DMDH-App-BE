@@ -257,12 +257,16 @@ app.post('/api/absensi-harian', async (req, res) => {
     }
 
     // Jika tidak ada data absensi, ambil daftar santri dari kelas tersebut
-    const sqlSantri = `SELECT id AS santri_id, nama FROM santri WHERE kelas_id = ?`;
+    const sqlSantri = `SELECT 
+      santri.id, 
+      santri.nama
+      FROM santri
+      WHERE kelas_id = ?`;
     const [santriRows] = await pool.query(sqlSantri, [kelas_id]);
 
     // Buat data absensi default (hadir = 0, izin = 0, dsb.)
     const defaultAbsensi = santriRows.map(santri => ({
-      santri_id: santri.santri_id,
+      santri_id: santri.id,
       nama: santri.nama,
       hadir: 0,
       izin: 0,
