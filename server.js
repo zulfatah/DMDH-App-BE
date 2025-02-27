@@ -400,11 +400,6 @@ app.post("/absensi", async (req, res) => {
 app.put("/absensi", async (req, res) => {
   try {
     const { tanggal, guru_id, kelas_id, waktu_id, santri_id, hadir, izin, alpa, pulang, sakit } = req.body;
-
-    if (!tanggal || !guru_id || !kelas_id || !waktu_id || !santri_id) {
-      return res.status(400).json({ error: "Data kunci (tanggal, guru_id, kelas_id, waktu_id, santri_id) harus disertakan" });
-    }
-
     // Periksa apakah data absensi sudah ada
     const checkSql = `SELECT hadir, izin, alpa, pulang, sakit FROM absensi WHERE tanggal = ? AND guru_id = ? AND kelas_id = ? AND waktu_id = ? AND santri_id = ?`;
     const [currentStatus] = await pool.query(checkSql, [tanggal, guru_id, kelas_id, waktu_id, santri_id]);
