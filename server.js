@@ -367,22 +367,70 @@ app.post("/waktu", async (req, res) => {
   }
 });
 
-// Bulk insert ke tabel Absensi
+// ✅ INSERT DATA ABSENSI (Mencegah Duplikasi)
 app.post("/absensi", async (req, res) => {
   try {
     const absensiArray = req.body.absensi;
+
     if (!Array.isArray(absensiArray) || absensiArray.length === 0) {
       return res.status(400).json({ error: "Data absensi harus berupa array dan tidak boleh kosong" });
     }
 
-    const values = absensiArray.map(({ tanggal, guru_id, kelas_id, waktu_id, santri_id, hadir, izin, alpa, pulang, sakit }) =>
-      [tanggal, guru_id, kelas_id, waktu_id, santri_id, hadir, izin, alpa, pulang, sakit]
-    );
+    for (const { tanggal, guru_id, kelas_id, waktu_id, santri_id, hadir, izin, alpa, pulang, sakit } of absensiArray) {
+      // Cek apakah data sudah ada
+      const checkSql = `SELECT COUNT(*) AS count FROM absensi WHERE tanggal = ? AND guru_id = ? AND kelas_id = ? AND waktu_id = ? AND santri_id = ?`;
+      const [checkResult] = await pool.query(checkSql, [tanggal, guru_id, kelas_id, waktu_id, santri_id]);
 
-    const sql = `INSERT INTO absensi (tanggal, guru_id, kelas_id, waktu_id, santri_id, hadir, izin, alpa, pulang, sakit) VALUES ?`;
-    const [result] = await pool.query(sql, [values]);
+      if (checkResult[0].count > 0) {
+        return res.status(409).json({ error: "Data absensi sudah ada, tidak boleh duplikat" });
+      }
 
-    res.status(201).json({ message: `${result.affectedRows} absensi berhasil ditambahkan` });
+      // Insert data jika belum ada
+      const insertSql = `INSERT INTO absensi (tanggal, guru_id, kelas_id, waktu_id, santri_id, hadir, izin, alpa, pulang, sakit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+      await pool.query(insertSql, [tanggal, guru_id, kelas_id, waktu_id, santri_id, hadir, izin, alpa, pulang, sakit]);
+    }
+
+    res.status(201).json({ message: "Absensi berhasil ditambahkan tanpa duplikasi" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ✅ UPDATE STATUS ABSENSI
+app.put("/absensi", async (req, res) => {
+  try {
+    const { tanggal, guru_id, kelas_id, waktu_id, santri_id, hadir, izin, alpa, pulang, sakit } = req.body;
+
+    if (!tanggal || !guru_id || !kelas_id || !waktu_id || !santri_id) {
+      return res.status(400).json({ error: "Data kunci (tanggal, guru_id, kelas_id, waktu_id, santri_id) harus disertakan" });
+    }
+
+    // Periksa apakah data absensi sudah ada
+    const checkSql = `SELECT hadir, izin, alpa, pulang, sakit FROM absensi WHERE tanggal = ? AND guru_id = ? AND kelas_id = ? AND waktu_id = ? AND santri_id = ?`;
+    const [currentStatus] = await pool.query(checkSql, [tanggal, guru_id, kelas_id, waktu_id, santri_id]);
+
+    if (currentStatus.length === 0) {
+      return res.status(404).json({ error: "Data absensi tidak ditemukan" });
+    }
+
+    const { hadir: h, izin: i, alpa: a, pulang: p, sakit: s } = currentStatus[0];
+    if (h === hadir && i === izin && a === alpa && p === pulang && s === sakit) {
+      return res.status(200).json({ message: "Tidak ada perubahan pada status absensi" });
+    }
+
+    // Update data absensi
+    const updateSql = `
+      UPDATE absensi 
+      SET hadir = ?, izin = ?, alpa = ?, pulang = ?, sakit = ? 
+      WHERE tanggal = ? AND guru_id = ? AND kelas_id = ? AND waktu_id = ? AND santri_id = ?
+    `;
+    const [updateResult] = await pool.query(updateSql, [hadir, izin, alpa, pulang, sakit, tanggal, guru_id, kelas_id, waktu_id, santri_id]);
+
+    if (updateResult.affectedRows > 0) {
+      res.status(200).json({ message: "Status absensi berhasil diperbarui" });
+    } else {
+      res.status(500).json({ error: "Gagal memperbarui absensi" });
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
