@@ -458,7 +458,7 @@ app.post('/absensi/bulanan', async (req, res) => {
   const query = `
       SELECT a.*, s.nama AS nama_santri
       FROM absensi a
-      JOIN santris s ON a.santri_id = s.id
+      JOIN santri s ON a.santri_id = s.id
       WHERE a.tanggal BETWEEN ? AND ?
       AND a.kelas_id = ?
       AND a.waktu_id = ?
