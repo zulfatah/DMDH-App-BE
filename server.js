@@ -479,8 +479,10 @@ app.post('/absensi/bulanan', async (req, res) => {
           // Di sini kita mau tahu apakah row.tanggal bentuknya string atau object
           console.log('Raw tanggal dari DB:', row.tanggal, ' - typeof:', typeof row.tanggal);
 
-          // Pastikan kita format tanggalnya ke "YYYY-MM-DD"
           const tanggal = new Date(row.tanggal).toISOString().slice(0, 10);
+console.log(`Raw tanggal dari DB:`, row.tanggal, ` - typeof:`, typeof row.tanggal);
+console.log(`Tanggal formatted (${row.nama_santri}):`, tanggal);
+
 
           // Log hasil format-nya
           console.log(`Tanggal formatted (${row.nama_santri}):`, tanggal);
