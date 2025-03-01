@@ -594,24 +594,14 @@ app.put("/absensi", async (req, res) => {
 
 //Absensi Bulanan
 app.post("/absensi/bulanan", async (req, res) => {
-  let { startDate, endDate, kelas_id, waktu_id } = req.body;
+  const { startDate, endDate, kelas_id, waktu_id } = req.body;
 
-  // Validasi parameter
   if (!startDate || !endDate || !kelas_id || !waktu_id) {
     return res.status(400).json({ message: "Parameter tidak lengkap" });
   }
 
-  // Pastikan kelas_id & waktu_id dalam format integer
-  kelas_id = parseInt(kelas_id, 10);
-  waktu_id = parseInt(waktu_id, 10);
-
-  if (isNaN(kelas_id) || isNaN(waktu_id)) {
-    return res.status(400).json({ message: "kelas_id dan waktu_id harus berupa angka" });
-  }
-
   const query = `
-      SELECT a.id, DATE(a.tanggal) AS tanggal, a.hadir, a.izin, a.alpa, a.pulang, a.sakit, 
-             s.nama AS nama_santri
+      SELECT a.*, s.nama AS nama_santri
       FROM absensi a
       JOIN santri s ON a.santri_id = s.id
       WHERE a.tanggal BETWEEN ? AND ?
@@ -621,7 +611,12 @@ app.post("/absensi/bulanan", async (req, res) => {
   `;
 
   try {
-    const [rows] = await pool.query(query, [startDate, endDate, kelas_id, waktu_id]);
+    const [rows] = await pool.query(query, [
+      startDate,
+      endDate,
+      kelas_id,
+      waktu_id,
+    ]);
 
     console.log("[DEBUG] Data absensi terambil:", rows.length, "records");
 
@@ -631,49 +626,55 @@ app.post("/absensi/bulanan", async (req, res) => {
     const rekap = {};
 
     rows.forEach((row) => {
-      const tanggal = row.tanggal;
+      let tanggal = typeof row.tanggal === 'string' 
+        ? row.tanggal.slice(0, 10) 
+        : new Date(row.tanggal).toISOString().slice(0, 10);
+
       const nama = row.nama_santri;
 
       if (!rekap[nama]) {
         rekap[nama] = {
           nama,
           tanggal: {},
-          jumlah: { H: 0, S: 0, P: 0, I: 0, A: 0 },
+          jumlah: { H: 0, S: 0, P: 0, I: 0, A: 0 } // Semua counter
         };
 
-        // Inisialisasi semua tanggal dengan status "-"
+        // Set semua tanggal jadi "-" dulu
         tanggalList.forEach((tgl) => {
           rekap[nama].tanggal[tgl] = "-";
         });
       }
 
-      // Tentukan kode status absensi
-      let kode = "A"; // Default Alpa
-      if (row.pulang) kode = "P";
-      else if (row.sakit) kode = "S";
+      // Tentukan kode status absensi dari database
+      let kode = "-"; // Default kalau gak ketemu (tapi harusnya pasti ketemu)
+      if (row.hadir) kode = "H";
       else if (row.izin) kode = "I";
-      else if (row.hadir) kode = "H";
+      else if (row.sakit) kode = "S";
+      else if (row.pulang) kode = "P";
+      else if (row.alpa) kode = "A"; // Kalau benar-benar alpa dari DB
 
-      // Set absensi di tanggal tsb & update jumlah
+      // Isi absensi di tanggal yang ditemukan
       rekap[nama].tanggal[tanggal] = kode;
-      rekap[nama].jumlah[kode]++;
+
+      // Update jumlah hanya kalau ada data absensi (bukan "-")
+      if (kode !== "-") {
+        rekap[nama].jumlah[kode]++;
+      }
     });
 
-    // Konversi ke array finalResult yang mudah dibaca di frontend
-    const finalResult = Object.values(rekap).map((santri) => {
-      return {
-        nama: santri.nama,
-        ...tanggalList.reduce((acc, tgl) => {
-          acc[tgl] = santri.tanggal[tgl]; // Jika tidak ada tetap "-"
-          return acc;
-        }, {}),
-        jumlah_h: santri.jumlah.H,
-        jumlah_s: santri.jumlah.S,
-        jumlah_p: santri.jumlah.P,
-        jumlah_i: santri.jumlah.I,
-        jumlah_a: santri.jumlah.A,
-      };
-    });
+    // Konversi ke array finalResult
+    const finalResult = Object.values(rekap).map((santri) => ({
+      nama: santri.nama,
+      ...tanggalList.reduce((acc, tgl) => {
+        acc[tgl] = santri.tanggal[tgl]; // Biarkan "-" kalau memang gak ada di DB
+        return acc;
+      }, {}),
+      jumlah_h: santri.jumlah.H,
+      jumlah_s: santri.jumlah.S,
+      jumlah_p: santri.jumlah.P,
+      jumlah_i: santri.jumlah.I,
+      jumlah_a: santri.jumlah.A, // Alpa diambil hanya kalau memang tersimpan sebagai alpa di DB
+    }));
 
     res.json(finalResult);
   } catch (err) {
@@ -685,7 +686,6 @@ app.post("/absensi/bulanan", async (req, res) => {
   }
 });
 
-// Fungsi untuk membuat daftar tanggal antara startDate dan endDate
 function generateTanggalRange(start, end) {
   const result = [];
   let current = new Date(start);
@@ -697,6 +697,7 @@ function generateTanggalRange(start, end) {
   }
   return result;
 }
+
 
 
 app.post("/absensi/bulanan/semuawaktu", async (req, res) => {
