@@ -700,73 +700,92 @@ function generateTanggalRange(start, end) {
 
 
 
-app.post("/absensi/bulanan/semuawaktu", async (req, res) => {
-  const { startDate, endDate, kelas_id } = req.body;
-
-  if (!startDate || !endDate || !kelas_id) {
-    return res
-      .status(400)
-      .json({ message: "startDate, endDate, kelas_id wajib diisi" });
-  }
-
-  try {
-    // Query ambil rekap absensi + nama waktu langsung
-    const [rows] = await pool.query(
+app.post("/absensi/bulanan/semuawaktu", async (req, res) => { 
+  const { startDate, endDate, kelas_id } = req.body; 
+ 
+  if (!startDate || !endDate || !kelas_id) { 
+    return res 
+      .status(400) 
+      .json({ message: "startDate, endDate, kelas_id wajib diisi" }); 
+  } 
+ 
+  try { 
+    // Query ambil rekap absensi + nama waktu langsung 
+    const [rows] = await pool.query( 
+      ` 
+          SELECT  
+              a.waktu_id,  
+              w.nama AS nama_waktu, 
+              a.santri_id,  
+              s.nama AS nama_santri, 
+              SUM(a.hadir) AS total_hadir, 
+              SUM(a.sakit) AS total_sakit, 
+              SUM(a.pulang) AS total_pulang, 
+              SUM(a.alpa) AS total_alpa, 
+              SUM(a.izin) AS total_izin 
+          FROM absensi a 
+          JOIN santri s ON a.santri_id = s.id 
+          JOIN waktu w ON a.waktu_id = w.id 
+          WHERE  
+              a.tanggal BETWEEN ? AND ? 
+              AND a.kelas_id = ? 
+          GROUP BY  
+              a.waktu_id, w.nama, a.santri_id, s.nama 
+      `, 
+      [startDate, endDate, kelas_id] 
+    ); 
+ 
+    // Hitung jumlah aktif belajar (jumlah hari antara startDate & endDate sesuai tgl yang ada di database)
+    const [activeStudyDays] = await pool.query(
       `
-          SELECT 
-              a.waktu_id, 
-              w.nama AS nama_waktu,
-              a.santri_id, 
-              s.nama AS nama_santri,
-              SUM(a.hadir) AS total_hadir,
-              SUM(a.sakit) AS total_sakit,
-              SUM(a.pulang) AS total_pulang,
-              SUM(a.izin) AS total_izin
-          FROM absensi a
-          JOIN santri s ON a.santri_id = s.id
-          JOIN waktu w ON a.waktu_id = w.id
-          WHERE 
-              a.tanggal BETWEEN ? AND ?
-              AND a.kelas_id = ?
-          GROUP BY 
-              a.waktu_id, w.nama, a.santri_id, s.nama
+      SELECT
+          a.waktu_id,
+          COUNT(DISTINCT a.tanggal) AS jumlah_hari
+      FROM 
+          absensi a
+      WHERE 
+          a.tanggal BETWEEN ? AND ?
+          AND a.kelas_id = ?
+      GROUP BY 
+          a.waktu_id
       `,
       [startDate, endDate, kelas_id]
     );
 
-    // Hitung jumlah aktif belajar (jumlah hari antara startDate & endDate)
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const jumlah_aktif_belajar =
-      Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
-
-    // Proses hasil query jadi format yang diminta
-    const result = {};
-
-    rows.forEach((row) => {
-      if (!result[row.nama_waktu]) {
-        result[row.nama_waktu] = {
-          jumlah_aktif_belajar,
-          rekap_bulanan: [],
-        };
-      }
-
-      result[row.nama_waktu].rekap_bulanan.push({
-        nama: row.nama_santri,
-        jumlah_h: row.total_hadir,
-        jumlah_s: row.total_sakit,
-        jumlah_p: row.total_pulang,
-        jumlah_i: row.total_izin,
-      });
+    // Create a mapping of waktu_id to jumlah_hari
+    const activeStudyDaysMap = {};
+    activeStudyDays.forEach(day => {
+      activeStudyDaysMap[day.waktu_id] = day.jumlah_hari;
     });
-
-    res.json(result);
-  } catch (error) {
-    console.error("Error saat mengambil data absensi bulanan:", error);
-    res
-      .status(500)
-      .json({ message: "Terjadi kesalahan server", error: error.message });
-  }
+ 
+    // Proses hasil query jadi format yang diminta 
+    const result = {}; 
+ 
+    rows.forEach((row) => { 
+      if (!result[row.nama_waktu]) { 
+        result[row.nama_waktu] = { 
+          jumlah_aktif_belajar: activeStudyDaysMap[row.waktu_id] || 0, 
+          rekap_bulanan: [], 
+        }; 
+      } 
+ 
+      result[row.nama_waktu].rekap_bulanan.push({ 
+        nama: row.nama_santri, 
+        jumlah_h: row.total_hadir, 
+        jumlah_s: row.total_sakit, 
+        jumlah_p: row.total_pulang, 
+        jumlah_i: row.total_izin, 
+        jumlah_a: row.total_alpa, 
+      }); 
+    }); 
+ 
+    res.json(result); 
+  } catch (error) { 
+    console.error("Error saat mengambil data absensi bulanan:", error); 
+    res 
+      .status(500) 
+      .json({ message: "Terjadi kesalahan server", error: error.message }); 
+  } 
 });
 
 // Jalankan server
