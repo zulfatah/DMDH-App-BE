@@ -447,6 +447,150 @@ app.put("/absensi", async (req, res) => {
   }
 });
 
+//Absensi Bulanan
+app.post('/absensi/bulanan', async (req, res) => {
+  const { startDate, endDate, kelas_id, waktu_id } = req.body;
+
+  if (!startDate || !endDate || !kelas_id || !waktu_id) {
+      return res.status(400).json({ message: 'Parameter tidak lengkap' });
+  }
+
+  const query = `
+      SELECT a.*, s.nama AS nama_santri
+      FROM absensi a
+      JOIN santris s ON a.santri_id = s.id
+      WHERE a.tanggal BETWEEN ? AND ?
+      AND a.kelas_id = ?
+      AND a.waktu_id = ?
+  `;
+
+  try {
+      const [rows] = await pool.query(query, [startDate, endDate, kelas_id, waktu_id]);
+
+      // Struktur hasil yang diinginkan
+      const tanggalList = generateTanggalRange(startDate, endDate);
+      const rekap = {};
+
+      rows.forEach(row => {
+          const nama = row.nama_santri;
+          const tanggal = row.tanggal;
+
+          if (!rekap[nama]) {
+              rekap[nama] = {
+                  nama,
+                  tanggal: {},
+                  jumlah: { H: 0, S: 0, P: 0, I: 0 }
+              };
+
+              tanggalList.forEach(tgl => {
+                  rekap[nama].tanggal[tgl] = '-'; // default kosong
+              });
+          }
+
+          let kode = 'H'; // default hadir
+          if (row.sakit) kode = 'S';
+          if (row.pulang) kode = 'P';
+          if (row.izin) kode = 'I';
+
+          rekap[nama].tanggal[tanggal] = kode;
+          rekap[nama].jumlah[kode]++;
+      });
+
+      // Konversi ke format final
+      const finalResult = Object.values(rekap).map(santri => {
+          return {
+              nama: santri.nama,
+              ...tanggalList.reduce((acc, tgl) => {
+                  acc[tgl] = santri.tanggal[tgl];
+                  return acc;
+              }, {}),
+              jumlah_h: santri.jumlah.H,
+              jumlah_s: santri.jumlah.S,
+              jumlah_p: santri.jumlah.P,
+              jumlah_i: santri.jumlah.I
+          };
+      });
+
+      res.json(finalResult);
+  } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Gagal mengambil data', error: err.message });
+  }
+});
+
+function generateTanggalRange(start, end) {
+  const result = [];
+  let current = new Date(start);
+  const last = new Date(end);
+
+  while (current <= last) {
+      result.push(current.toISOString().split('T')[0]);
+      current.setDate(current.getDate() + 1);
+  }
+  return result;
+}
+
+
+app.post('/absensi/bulanan/semuawaktu', async (req, res) => {
+  const { startDate, endDate, kelas_id } = req.body;
+
+  if (!startDate || !endDate || !kelas_id) {
+      return res.status(400).json({ message: 'startDate, endDate, kelas_id wajib diisi' });
+  }
+
+  try {
+      // Query ambil rekap absensi + nama waktu langsung
+      const [rows] = await pool.query(`
+          SELECT 
+              a.waktu_id, 
+              w.nama AS nama_waktu,
+              a.santri_id, 
+              s.nama AS nama_santri,
+              SUM(a.hadir) AS total_hadir,
+              SUM(a.sakit) AS total_sakit,
+              SUM(a.pulang) AS total_pulang,
+              SUM(a.izin) AS total_izin
+          FROM absensi a
+          JOIN santri s ON a.santri_id = s.id
+          JOIN waktu w ON a.waktu_id = w.id
+          WHERE 
+              a.tanggal BETWEEN ? AND ?
+              AND a.kelas_id = ?
+          GROUP BY 
+              a.waktu_id, w.nama, a.santri_id, s.nama
+      `, [startDate, endDate, kelas_id]);
+
+      // Hitung jumlah aktif belajar (jumlah hari antara startDate & endDate)
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const jumlah_aktif_belajar = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+
+      // Proses hasil query jadi format yang diminta
+      const result = {};
+
+      rows.forEach(row => {
+          if (!result[row.nama_waktu]) {
+              result[row.nama_waktu] = {
+                  jumlah_aktif_belajar,
+                  rekap_bulanan: []
+              };
+          }
+
+          result[row.nama_waktu].rekap_bulanan.push({
+              nama: row.nama_santri,
+              jumlah_h: row.total_hadir,
+              jumlah_s: row.total_sakit,
+              jumlah_p: row.total_pulang,
+              jumlah_i: row.total_izin
+          });
+      });
+
+      res.json(result);
+  } catch (error) {
+      console.error('Error saat mengambil data absensi bulanan:', error);
+      res.status(500).json({ message: 'Terjadi kesalahan server', error: error.message });
+  }
+});
 
 // Jalankan server
 app.listen(port, "0.0.0.0", () => {
