@@ -620,11 +620,14 @@ app.post("/absensi/bulanan", async (req, res) => {
     
     console.log("[DEBUG] Data absensi terambil:", rows.length, "records");
     
+    // Generate the full date range
+    const tanggalList = generateTanggalRange(startDate, endDate);
+    console.log("[DEBUG] Tanggal range:", tanggalList);
+    
     const rekap = {};
     
-    // Process each attendance record
+    // Initialize rekap with all students and all dates set to "-"
     rows.forEach((row) => {
-      const tanggal = row.tanggal_format;
       const nama = row.nama_santri;
       
       if (!rekap[nama]) {
@@ -633,7 +636,18 @@ app.post("/absensi/bulanan", async (req, res) => {
           tanggal: {},
           jumlah: { H: 0, S: 0, P: 0, I: 0, A: 0 }
         };
+        
+        // Initialize all dates with "-"
+        tanggalList.forEach((tgl) => {
+          rekap[nama].tanggal[tgl] = "-";
+        });
       }
+    });
+    
+    // Now fill in actual attendance data
+    rows.forEach((row) => {
+      const tanggal = row.tanggal_format;
+      const nama = row.nama_santri;
       
       // Determine attendance status code
       let kode = "-";
@@ -652,21 +666,20 @@ app.post("/absensi/bulanan", async (req, res) => {
       }
     });
     
-    // Convert to final result array with only dates that have attendance records
+    // Convert to final result array with all dates in the range
     const finalResult = Object.values(rekap).map((santri) => {
       const result = {
         nama: santri.nama,
+        ...tanggalList.reduce((acc, tgl) => {
+          acc[tgl] = santri.tanggal[tgl]; // Will be "-" if no attendance data
+          return acc;
+        }, {}),
         jumlah_h: santri.jumlah.H,
         jumlah_s: santri.jumlah.S,
         jumlah_p: santri.jumlah.P,
         jumlah_i: santri.jumlah.I,
         jumlah_a: santri.jumlah.A
       };
-      
-      // Add only dates that have attendance records
-      Object.keys(santri.tanggal).forEach((tgl) => {
-        result[tgl] = santri.tanggal[tgl];
-      });
       
       return result;
     });
@@ -680,6 +693,18 @@ app.post("/absensi/bulanan", async (req, res) => {
     });
   }
 });
+
+function generateTanggalRange(start, end) {
+  const result = [];
+  let current = new Date(start);
+  const last = new Date(end);
+  
+  while (current <= last) {
+    result.push(current.toISOString().slice(0, 10));
+    current.setDate(current.getDate() + 1);
+  }
+  return result;
+}
 
 
 
