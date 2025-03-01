@@ -475,7 +475,7 @@ app.post('/absensi/bulanan', async (req, res) => {
 
       rows.forEach(row => {
           const nama = row.nama_santri;
-          const tanggal = new Date(row.tanggal).toISOString().slice(0, 10); 
+          const tanggal = row.tanggal; 
 
 
           if (!rekap[nama]) {
