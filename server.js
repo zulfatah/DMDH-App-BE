@@ -3,7 +3,6 @@ const express = require("express");
 const mysql = require("mysql2/promise"); // Gunakan mysql2 dengan async/await
 const cors = require("cors");
 
-
 const app = express();
 const port = process.env.PORT || 3002;
 
@@ -32,7 +31,10 @@ app.post("/login", async (req, res) => {
 
   try {
     // Cek apakah user ada di database
-    const [userRows] = await pool.query("SELECT * FROM users WHERE username = ? AND password = ?", [username, password]);
+    const [userRows] = await pool.query(
+      "SELECT * FROM users WHERE username = ? AND password = ?",
+      [username, password]
+    );
 
     if (userRows.length === 0) {
       return res.status(401).json({ error: "Username atau password salah" });
@@ -42,10 +44,15 @@ app.post("/login", async (req, res) => {
     const user_id = user.id;
 
     // Cek apakah user ini adalah seorang guru
-    const [guruRows] = await pool.query("SELECT id FROM guru WHERE user_id = ?", [user_id]);
+    const [guruRows] = await pool.query(
+      "SELECT id FROM guru WHERE user_id = ?",
+      [user_id]
+    );
 
     if (guruRows.length === 0) {
-      return res.status(403).json({ error: "User ini bukan seorang guru", user , user_id });
+      return res
+        .status(403)
+        .json({ error: "User ini bukan seorang guru", user, user_id });
     }
 
     const guru_id = guruRows[0].id;
@@ -67,23 +74,20 @@ app.post("/login", async (req, res) => {
        WHERE j.guru_id = ?`,
       [guru_id]
     );
-    
 
     res.json({
       message: "Login berhasil",
       user: {
         id: user_id,
         username: user.username,
-        guru_id: guru_id
+        guru_id: guru_id,
       },
-      jadwal_ngajar: jadwalRows
+      jadwal_ngajar: jadwalRows,
     });
-
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
 
 // **1️⃣ API Daftar User**
 app.post("/register", async (req, res) => {
@@ -95,7 +99,10 @@ app.post("/register", async (req, res) => {
 
   try {
     // Cek apakah username sudah ada
-    const [existingUsers] = await pool.query("SELECT id FROM users WHERE username = ?", [username]);
+    const [existingUsers] = await pool.query(
+      "SELECT id FROM users WHERE username = ?",
+      [username]
+    );
 
     if (existingUsers.length > 0) {
       return res.status(400).json({ error: "Username sudah digunakan" });
@@ -111,7 +118,10 @@ app.post("/register", async (req, res) => {
 
     // Jika user juga seorang guru, tambahkan ke tabel guru
     if (isGuru && namaGuru) {
-      await pool.query("INSERT INTO guru (nama, user_id) VALUES (?, ?)", [namaGuru, userId]);
+      await pool.query("INSERT INTO guru (nama, user_id) VALUES (?, ?)", [
+        namaGuru,
+        userId,
+      ]);
     }
 
     res.status(201).json({ message: "Pendaftaran berhasil", user_id: userId });
@@ -124,7 +134,9 @@ app.post("/register/bulk", async (req, res) => {
   const users = req.body.users; // Expect array of users
 
   if (!Array.isArray(users) || users.length === 0) {
-    return res.status(400).json({ error: "Data users harus berupa array dan tidak boleh kosong" });
+    return res
+      .status(400)
+      .json({ error: "Data users harus berupa array dan tidak boleh kosong" });
   }
 
   try {
@@ -135,7 +147,11 @@ app.post("/register/bulk", async (req, res) => {
       const { username, password, isGuru, namaGuru } = user;
 
       if (!username || !password) {
-        return res.status(400).json({ error: "Username dan password wajib diisi untuk setiap user" });
+        return res
+          .status(400)
+          .json({
+            error: "Username dan password wajib diisi untuk setiap user",
+          });
       }
 
       // Simpan user ke array
@@ -153,32 +169,50 @@ app.post("/register/bulk", async (req, res) => {
       [userValues]
     );
 
-    const insertedUserIds = Array.from({ length: userResults.affectedRows }, (_, i) => userResults.insertId + i);
+    const insertedUserIds = Array.from(
+      { length: userResults.affectedRows },
+      (_, i) => userResults.insertId + i
+    );
 
     // Jika ada guru yang harus dimasukkan
     if (guruValues.length > 0) {
-      const guruInsertValues = guruValues.map((nama, i) => [nama, insertedUserIds[i]]);
-      await pool.query("INSERT INTO guru (nama, user_id) VALUES ?", [guruInsertValues]);
+      const guruInsertValues = guruValues.map((nama, i) => [
+        nama,
+        insertedUserIds[i],
+      ]);
+      await pool.query("INSERT INTO guru (nama, user_id) VALUES ?", [
+        guruInsertValues,
+      ]);
     }
 
-    res.status(201).json({ message: `${userResults.affectedRows} user berhasil didaftarkan` });
+    res
+      .status(201)
+      .json({
+        message: `${userResults.affectedRows} user berhasil didaftarkan`,
+      });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
 
 // **2️⃣ API Reset Password**
 app.post("/reset-password", async (req, res) => {
   const { username, password_lama, password_baru } = req.body;
 
   if (!username || !password_lama || !password_baru) {
-    return res.status(400).json({ error: "Username, password lama, dan password baru wajib diisi" });
+    return res
+      .status(400)
+      .json({
+        error: "Username, password lama, dan password baru wajib diisi",
+      });
   }
 
   try {
     // 1️⃣ Cek apakah user ada
-    const [userRows] = await pool.query("SELECT * FROM users WHERE username = ?", [username]);
+    const [userRows] = await pool.query(
+      "SELECT * FROM users WHERE username = ?",
+      [username]
+    );
 
     if (userRows.length === 0) {
       return res.status(404).json({ error: "User tidak ditemukan" });
@@ -192,7 +226,10 @@ app.post("/reset-password", async (req, res) => {
     }
 
     // 3️⃣ Update password user
-    await pool.query("UPDATE users SET password = ? WHERE username = ?", [password_baru, username]);
+    await pool.query("UPDATE users SET password = ? WHERE username = ?", [
+      password_baru,
+      username,
+    ]);
 
     res.json({ message: "Password berhasil direset" });
   } catch (err) {
@@ -225,12 +262,14 @@ app.post("/jadwal-ngajar", async (req, res) => {
 });
 
 // Endpoint untuk mendapatkan data absensi berdasarkan kelas_id, tanggal, dan waktu_id
-app.post('/api/absensi-harian', async (req, res) => {
+app.post("/api/absensi-harian", async (req, res) => {
   try {
     const { kelas_id, tanggal, waktu_id } = req.body;
 
     if (!kelas_id || !tanggal || !waktu_id) {
-      return res.status(400).json({ message: 'kelas_id, tanggal, dan waktu_id diperlukan' });
+      return res
+        .status(400)
+        .json({ message: "kelas_id, tanggal, dan waktu_id diperlukan" });
     }
 
     // Cek apakah ada data absensi untuk tanggal, kelas, dan waktu tertentu
@@ -249,7 +288,11 @@ app.post('/api/absensi-harian', async (req, res) => {
         AND DATE(absensi.tanggal) = ? 
         AND absensi.waktu_id = ?`;
 
-    const [absensiRows] = await pool.query(sqlAbsensi, [kelas_id, tanggal, waktu_id]);
+    const [absensiRows] = await pool.query(sqlAbsensi, [
+      kelas_id,
+      tanggal,
+      waktu_id,
+    ]);
 
     // Jika data absensi ditemukan, kirim data tersebut
     if (absensiRows.length > 0) {
@@ -265,25 +308,22 @@ app.post('/api/absensi-harian', async (req, res) => {
     const [santriRows] = await pool.query(sqlSantri, [kelas_id]);
 
     // Buat data absensi default (hadir = 0, izin = 0, dsb.)
-    const defaultAbsensi = santriRows.map(santri => ({
+    const defaultAbsensi = santriRows.map((santri) => ({
       santri_id: santri.id,
       nama: santri.nama,
       hadir: 0,
       izin: 0,
       alpa: 0,
       pulang: 0,
-      sakit: 0
+      sakit: 0,
     }));
 
     res.json(defaultAbsensi);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+    res.status(500).json({ message: "Terjadi kesalahan pada server" });
   }
 });
-
-
-
 
 // Endpoint untuk mendapatkan semua user
 app.get("/api/users", async (req, res) => {
@@ -300,14 +340,20 @@ app.post("/kelas", async (req, res) => {
   try {
     const kelasArray = req.body.kelas;
     if (!Array.isArray(kelasArray) || kelasArray.length === 0) {
-      return res.status(400).json({ error: "Data kelas harus berupa array dan tidak boleh kosong" });
+      return res
+        .status(400)
+        .json({
+          error: "Data kelas harus berupa array dan tidak boleh kosong",
+        });
     }
 
     const values = kelasArray.map((nama) => [nama]);
     const sql = "INSERT INTO kelas (nama) VALUES ?";
     const [result] = await pool.query(sql, [values]);
 
-    res.status(201).json({ message: `${result.affectedRows} kelas berhasil ditambahkan` });
+    res
+      .status(201)
+      .json({ message: `${result.affectedRows} kelas berhasil ditambahkan` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -318,14 +364,18 @@ app.post("/guru", async (req, res) => {
   try {
     const guruArray = req.body.guru;
     if (!Array.isArray(guruArray) || guruArray.length === 0) {
-      return res.status(400).json({ error: "Data guru harus berupa array dan tidak boleh kosong" });
+      return res
+        .status(400)
+        .json({ error: "Data guru harus berupa array dan tidak boleh kosong" });
     }
 
     const values = guruArray.map((nama) => [nama]);
     const sql = "INSERT INTO guru (nama) VALUES ?";
     const [result] = await pool.query(sql, [values]);
 
-    res.status(201).json({ message: `${result.affectedRows} guru berhasil ditambahkan` });
+    res
+      .status(201)
+      .json({ message: `${result.affectedRows} guru berhasil ditambahkan` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -336,14 +386,20 @@ app.post("/santri", async (req, res) => {
   try {
     const santriArray = req.body.santri;
     if (!Array.isArray(santriArray) || santriArray.length === 0) {
-      return res.status(400).json({ error: "Data santri harus berupa array dan tidak boleh kosong" });
+      return res
+        .status(400)
+        .json({
+          error: "Data santri harus berupa array dan tidak boleh kosong",
+        });
     }
 
     const values = santriArray.map((nama) => [nama]);
     const sql = "INSERT INTO santri (nama) VALUES ?";
     const [result] = await pool.query(sql, [values]);
 
-    res.status(201).json({ message: `${result.affectedRows} santri berhasil ditambahkan` });
+    res
+      .status(201)
+      .json({ message: `${result.affectedRows} santri berhasil ditambahkan` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -354,14 +410,20 @@ app.post("/waktu", async (req, res) => {
   try {
     const waktuArray = req.body.waktu;
     if (!Array.isArray(waktuArray) || waktuArray.length === 0) {
-      return res.status(400).json({ error: "Data waktu harus berupa array dan tidak boleh kosong" });
+      return res
+        .status(400)
+        .json({
+          error: "Data waktu harus berupa array dan tidak boleh kosong",
+        });
     }
 
     const values = waktuArray.map((nama) => [nama]);
     const sql = "INSERT INTO waktu (nama) VALUES ?";
     const [result] = await pool.query(sql, [values]);
 
-    res.status(201).json({ message: `${result.affectedRows} waktu berhasil ditambahkan` });
+    res
+      .status(201)
+      .json({ message: `${result.affectedRows} waktu berhasil ditambahkan` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -373,24 +435,60 @@ app.post("/absensi", async (req, res) => {
     const absensiArray = req.body.absensi;
 
     if (!Array.isArray(absensiArray) || absensiArray.length === 0) {
-      return res.status(400).json({ error: "Data absensi harus berupa array dan tidak boleh kosong" });
+      return res
+        .status(400)
+        .json({
+          error: "Data absensi harus berupa array dan tidak boleh kosong",
+        });
     }
 
-    for (const { tanggal, guru_id, kelas_id, waktu_id, santri_id, hadir, izin, alpa, pulang, sakit } of absensiArray) {
+    for (const {
+      tanggal,
+      guru_id,
+      kelas_id,
+      waktu_id,
+      santri_id,
+      hadir,
+      izin,
+      alpa,
+      pulang,
+      sakit,
+    } of absensiArray) {
       // Cek apakah data sudah ada
       const checkSql = `SELECT COUNT(*) AS count FROM absensi WHERE tanggal = ? AND guru_id = ? AND kelas_id = ? AND waktu_id = ? AND santri_id = ?`;
-      const [checkResult] = await pool.query(checkSql, [tanggal, guru_id, kelas_id, waktu_id, santri_id]);
+      const [checkResult] = await pool.query(checkSql, [
+        tanggal,
+        guru_id,
+        kelas_id,
+        waktu_id,
+        santri_id,
+      ]);
 
       if (checkResult[0].count > 0) {
-        return res.status(409).json({ error: "Data absensi sudah ada, tidak boleh duplikat" });
+        return res
+          .status(409)
+          .json({ error: "Data absensi sudah ada, tidak boleh duplikat" });
       }
 
       // Insert data jika belum ada
       const insertSql = `INSERT INTO absensi (tanggal, guru_id, kelas_id, waktu_id, santri_id, hadir, izin, alpa, pulang, sakit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-      await pool.query(insertSql, [tanggal, guru_id, kelas_id, waktu_id, santri_id, hadir, izin, alpa, pulang, sakit]);
+      await pool.query(insertSql, [
+        tanggal,
+        guru_id,
+        kelas_id,
+        waktu_id,
+        santri_id,
+        hadir,
+        izin,
+        alpa,
+        pulang,
+        sakit,
+      ]);
     }
 
-    res.status(201).json({ message: "Absensi berhasil ditambahkan tanpa duplikasi" });
+    res
+      .status(201)
+      .json({ message: "Absensi berhasil ditambahkan tanpa duplikasi" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -402,24 +500,57 @@ app.put("/absensi", async (req, res) => {
     const absensiArray = req.body.absensi;
 
     if (!Array.isArray(absensiArray) || absensiArray.length === 0) {
-      return res.status(400).json({ error: "Data absensi harus berupa array dan tidak boleh kosong" });
+      return res
+        .status(400)
+        .json({
+          error: "Data absensi harus berupa array dan tidak boleh kosong",
+        });
     }
 
     let updatedCount = 0;
     let notFoundCount = 0;
 
-    for (const { tanggal, guru_id, kelas_id, waktu_id, santri_id, hadir, izin, alpa, pulang, sakit } of absensiArray) {
+    for (const {
+      tanggal,
+      guru_id,
+      kelas_id,
+      waktu_id,
+      santri_id,
+      hadir,
+      izin,
+      alpa,
+      pulang,
+      sakit,
+    } of absensiArray) {
       // Periksa apakah data absensi sudah ada
       const checkSql = `SELECT hadir, izin, alpa, pulang, sakit FROM absensi WHERE tanggal = ? AND guru_id = ? AND kelas_id = ? AND waktu_id = ? AND santri_id = ?`;
-      const [currentStatus] = await pool.query(checkSql, [tanggal, guru_id, kelas_id, waktu_id, santri_id]);
+      const [currentStatus] = await pool.query(checkSql, [
+        tanggal,
+        guru_id,
+        kelas_id,
+        waktu_id,
+        santri_id,
+      ]);
 
       if (currentStatus.length === 0) {
         notFoundCount++;
         continue; // Jika tidak ditemukan, lanjutkan ke data berikutnya
       }
 
-      const { hadir: h, izin: i, alpa: a, pulang: p, sakit: s } = currentStatus[0];
-      if (h === hadir && i === izin && a === alpa && p === pulang && s === sakit) {
+      const {
+        hadir: h,
+        izin: i,
+        alpa: a,
+        pulang: p,
+        sakit: s,
+      } = currentStatus[0];
+      if (
+        h === hadir &&
+        i === izin &&
+        a === alpa &&
+        p === pulang &&
+        s === sakit
+      ) {
         continue; // Jika tidak ada perubahan, lewati update
       }
 
@@ -429,7 +560,18 @@ app.put("/absensi", async (req, res) => {
         SET hadir = ?, izin = ?, alpa = ?, pulang = ?, sakit = ? 
         WHERE tanggal = ? AND guru_id = ? AND kelas_id = ? AND waktu_id = ? AND santri_id = ?
       `;
-      const [updateResult] = await pool.query(updateSql, [hadir, izin, alpa, pulang, sakit, tanggal, guru_id, kelas_id, waktu_id, santri_id]);
+      const [updateResult] = await pool.query(updateSql, [
+        hadir,
+        izin,
+        alpa,
+        pulang,
+        sakit,
+        tanggal,
+        guru_id,
+        kelas_id,
+        waktu_id,
+        santri_id,
+      ]);
 
       if (updateResult.affectedRows > 0) {
         updatedCount++;
@@ -437,11 +579,14 @@ app.put("/absensi", async (req, res) => {
     }
 
     if (updatedCount === 0 && notFoundCount === absensiArray.length) {
-      return res.status(404).json({ error: "Semua data absensi tidak ditemukan" });
+      return res
+        .status(404)
+        .json({ error: "Semua data absensi tidak ditemukan" });
     }
 
-    res.status(200).json({ message: `${updatedCount} data absensi berhasil diperbarui` });
-
+    res
+      .status(200)
+      .json({ message: `${updatedCount} data absensi berhasil diperbarui` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -455,9 +600,8 @@ app.post('/absensi/bulanan', async (req, res) => {
       return res.status(400).json({ message: 'Parameter tidak lengkap' });
   }
 
-  // Query dengan DATE() agar tanggal langsung bersih
   const query = `
-      SELECT a.santri_id, DATE(a.tanggal) AS tanggal, s.nama AS nama_santri,
+      SELECT a.santri_id, a.tanggal, s.nama AS nama_santri, 
              a.hadir, a.sakit, a.pulang, a.izin
       FROM absensi a
       JOIN santri s ON a.santri_id = s.id
@@ -469,15 +613,20 @@ app.post('/absensi/bulanan', async (req, res) => {
   try {
       const [rows] = await pool.query(query, [startDate, endDate, kelas_id, waktu_id]);
 
-      console.log('Data hasil query:', rows); // Debug biar jelas
+      // Log data mentah dari query
+      console.log("Hasil Query Absensi:", rows);
 
+      // Buat list tanggal antara startDate dan endDate
       const tanggalList = generateTanggalRange(startDate, endDate);
+      console.log("Tanggal List:", tanggalList);
 
       const rekap = {};
 
+      // Proses data per baris absensi
       rows.forEach(row => {
           const nama = row.nama_santri;
-          const tanggal = row.tanggal; // Sudah langsung format YYYY-MM-DD dari query
+          const tanggal = row.tanggal; // langsung pakai, karena tipe DATE sudah aman (format: YYYY-MM-DD)
+
           console.log(`Proses: ${nama} - ${tanggal}`);
 
           if (!rekap[nama]) {
@@ -487,37 +636,44 @@ app.post('/absensi/bulanan', async (req, res) => {
                   jumlah: { H: 0, S: 0, P: 0, I: 0 }
               };
 
-              // Set semua tanggal defaultnya '-'
+              // Inisialisasi semua tanggal sebagai "-"
               tanggalList.forEach(tgl => {
                   rekap[nama].tanggal[tgl] = '-';
               });
           }
 
+          // Tentukan kode kehadiran
           let kode = 'H'; // default hadir
           if (row.sakit) kode = 'S';
           if (row.pulang) kode = 'P';
           if (row.izin) kode = 'I';
 
+          // Isi kehadiran di tanggal tersebut
           rekap[nama].tanggal[tanggal] = kode;
+
+          // Hitung jumlah masing-masing
           rekap[nama].jumlah[kode]++;
       });
 
-      // Bentuk array finalResult
-      const finalResult = Object.values(rekap).map(santri => ({
-          nama: santri.nama,
-          ...tanggalList.reduce((acc, tgl) => {
-              acc[tgl] = santri.tanggal[tgl];  // Udah dijamin formatnya sama
-              return acc;
-          }, {}),
-          jumlah_h: santri.jumlah.H,
-          jumlah_s: santri.jumlah.S,
-          jumlah_p: santri.jumlah.P,
-          jumlah_i: santri.jumlah.I
-      }));
+      // Konversi hasil rekap ke format final yang dikirim ke client
+      const finalResult = Object.values(rekap).map(santri => {
+          return {
+              nama: santri.nama,
+              ...tanggalList.reduce((acc, tgl) => {
+                  acc[tgl] = santri.tanggal[tgl]; // bisa H, S, P, I atau "-"
+                  return acc;
+              }, {}),
+              jumlah_h: santri.jumlah.H,
+              jumlah_s: santri.jumlah.S,
+              jumlah_p: santri.jumlah.P,
+              jumlah_i: santri.jumlah.I
+          };
+      });
 
       res.json(finalResult);
+
   } catch (err) {
-      console.error(err);
+      console.error("Error Query Absensi:", err);
       res.status(500).json({ message: 'Gagal mengambil data', error: err.message });
   }
 });
@@ -528,28 +684,26 @@ function generateTanggalRange(start, end) {
   const last = new Date(end);
 
   while (current <= last) {
-      result.push(current.toISOString().slice(0, 10));
+      result.push(current.toISOString().split('T')[0]); // format YYYY-MM-DD
       current.setDate(current.getDate() + 1);
   }
-
   return result;
 }
 
 
-
-
-
-
-app.post('/absensi/bulanan/semuawaktu', async (req, res) => {
+app.post("/absensi/bulanan/semuawaktu", async (req, res) => {
   const { startDate, endDate, kelas_id } = req.body;
 
   if (!startDate || !endDate || !kelas_id) {
-      return res.status(400).json({ message: 'startDate, endDate, kelas_id wajib diisi' });
+    return res
+      .status(400)
+      .json({ message: "startDate, endDate, kelas_id wajib diisi" });
   }
 
   try {
-      // Query ambil rekap absensi + nama waktu langsung
-      const [rows] = await pool.query(`
+    // Query ambil rekap absensi + nama waktu langsung
+    const [rows] = await pool.query(
+      `
           SELECT 
               a.waktu_id, 
               w.nama AS nama_waktu,
@@ -567,37 +721,42 @@ app.post('/absensi/bulanan/semuawaktu', async (req, res) => {
               AND a.kelas_id = ?
           GROUP BY 
               a.waktu_id, w.nama, a.santri_id, s.nama
-      `, [startDate, endDate, kelas_id]);
+      `,
+      [startDate, endDate, kelas_id]
+    );
 
-      // Hitung jumlah aktif belajar (jumlah hari antara startDate & endDate)
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      const jumlah_aktif_belajar = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+    // Hitung jumlah aktif belajar (jumlah hari antara startDate & endDate)
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const jumlah_aktif_belajar =
+      Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
 
-      // Proses hasil query jadi format yang diminta
-      const result = {};
+    // Proses hasil query jadi format yang diminta
+    const result = {};
 
-      rows.forEach(row => {
-          if (!result[row.nama_waktu]) {
-              result[row.nama_waktu] = {
-                  jumlah_aktif_belajar,
-                  rekap_bulanan: []
-              };
-          }
+    rows.forEach((row) => {
+      if (!result[row.nama_waktu]) {
+        result[row.nama_waktu] = {
+          jumlah_aktif_belajar,
+          rekap_bulanan: [],
+        };
+      }
 
-          result[row.nama_waktu].rekap_bulanan.push({
-              nama: row.nama_santri,
-              jumlah_h: row.total_hadir,
-              jumlah_s: row.total_sakit,
-              jumlah_p: row.total_pulang,
-              jumlah_i: row.total_izin
-          });
+      result[row.nama_waktu].rekap_bulanan.push({
+        nama: row.nama_santri,
+        jumlah_h: row.total_hadir,
+        jumlah_s: row.total_sakit,
+        jumlah_p: row.total_pulang,
+        jumlah_i: row.total_izin,
       });
+    });
 
-      res.json(result);
+    res.json(result);
   } catch (error) {
-      console.error('Error saat mengambil data absensi bulanan:', error);
-      res.status(500).json({ message: 'Terjadi kesalahan server', error: error.message });
+    console.error("Error saat mengambil data absensi bulanan:", error);
+    res
+      .status(500)
+      .json({ message: "Terjadi kesalahan server", error: error.message });
   }
 });
 
