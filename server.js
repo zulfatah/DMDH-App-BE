@@ -593,102 +593,81 @@ app.put("/absensi", async (req, res) => {
 });
 
 //Absensi Bulanan
-app.post('/absensi/bulanan', async (req, res) => {
-  const { startDate, endDate, kelas_id, waktu_id } = req.body;
-
-  if (!startDate || !endDate || !kelas_id || !waktu_id) {
-      return res.status(400).json({ message: 'Parameter tidak lengkap' });
-  }
+app.post('/rekap-absensi', async (req, res) => {
+  const { startDate, endDate } = req.body;
 
   const query = `
-      SELECT a.santri_id, a.tanggal, s.nama AS nama_santri, 
-             a.hadir, a.sakit, a.pulang, a.izin
+      SELECT 
+          s.nama_santri,
+          DATE_FORMAT(a.tanggal, '%Y-%m-%d') AS tanggal,  -- Format langsung dari SQL
+          a.hadir, a.sakit, a.pulang, a.izin
       FROM absensi a
       JOIN santri s ON a.santri_id = s.id
       WHERE a.tanggal BETWEEN ? AND ?
-      AND a.kelas_id = ?
-      AND a.waktu_id = ?
+      ORDER BY a.tanggal, s.nama_santri
   `;
 
-  try {
-      const [rows] = await pool.query(query, [startDate, endDate, kelas_id, waktu_id]);
+  const [rows] = await connection.execute(query, [startDate, endDate]);
 
-      // Log data mentah dari query
-      console.log("Hasil Query Absensi:", rows);
+  // Buat list tanggal dari startDate - endDate
+  const tanggalList = generateTanggalList(startDate, endDate);
+  console.log("Tanggal List:", tanggalList);
 
-      // Buat list tanggal antara startDate dan endDate
-      const tanggalList = generateTanggalRange(startDate, endDate);
-      console.log("Tanggal List:", tanggalList);
+  const rekap = {};
 
-      const rekap = {};
+  rows.forEach(row => {
+      const nama = row.nama_santri;
+      const tanggal = row.tanggal;  // Udah langsung string dari SQL
+      console.log(`Proses: ${nama} - ${tanggal}`);
 
-      // Proses data per baris absensi
-      rows.forEach(row => {
-          const nama = row.nama_santri;
-          const tanggal = row.tanggal; // langsung pakai, karena tipe DATE sudah aman (format: YYYY-MM-DD)
-
-          console.log(`Proses: ${nama} - ${tanggal}`);
-
-          if (!rekap[nama]) {
-              rekap[nama] = {
-                  nama,
-                  tanggal: {},
-                  jumlah: { H: 0, S: 0, P: 0, I: 0 }
-              };
-
-              // Inisialisasi semua tanggal sebagai "-"
-              tanggalList.forEach(tgl => {
-                  rekap[nama].tanggal[tgl] = '-';
-              });
-          }
-
-          // Tentukan kode kehadiran
-          let kode = 'H'; // default hadir
-          if (row.sakit) kode = 'S';
-          if (row.pulang) kode = 'P';
-          if (row.izin) kode = 'I';
-
-          // Isi kehadiran di tanggal tersebut
-          rekap[nama].tanggal[tanggal] = kode;
-
-          // Hitung jumlah masing-masing
-          rekap[nama].jumlah[kode]++;
-      });
-
-      // Konversi hasil rekap ke format final yang dikirim ke client
-      const finalResult = Object.values(rekap).map(santri => {
-          return {
-              nama: santri.nama,
-              ...tanggalList.reduce((acc, tgl) => {
-                  acc[tgl] = santri.tanggal[tgl]; // bisa H, S, P, I atau "-"
-                  return acc;
-              }, {}),
-              jumlah_h: santri.jumlah.H,
-              jumlah_s: santri.jumlah.S,
-              jumlah_p: santri.jumlah.P,
-              jumlah_i: santri.jumlah.I
+      if (!rekap[nama]) {
+          rekap[nama] = {
+              nama,
+              tanggal: {},
+              jumlah: { H: 0, S: 0, P: 0, I: 0 }
           };
-      });
 
-      res.json(finalResult);
+          // Inisialisasi semua tanggal sebagai "-"
+          tanggalList.forEach(tgl => {
+              rekap[nama].tanggal[tgl] = '-';
+          });
+      }
 
-  } catch (err) {
-      console.error("Error Query Absensi:", err);
-      res.status(500).json({ message: 'Gagal mengambil data', error: err.message });
-  }
+      let kode = 'H';  // default hadir
+      if (row.sakit) kode = 'S';
+      if (row.pulang) kode = 'P';
+      if (row.izin) kode = 'I';
+
+      rekap[nama].tanggal[tanggal] = kode;
+      rekap[nama].jumlah[kode]++;
+  });
+
+  const hasil = Object.values(rekap).map(item => {
+      return {
+          nama: item.nama,
+          ...item.tanggal,
+          jumlah_h: item.jumlah.H,
+          jumlah_s: item.jumlah.S,
+          jumlah_p: item.jumlah.P,
+          jumlah_i: item.jumlah.I,
+      };
+  });
+
+  res.json(hasil);
 });
 
-function generateTanggalRange(start, end) {
-  const result = [];
-  let current = new Date(start);
-  const last = new Date(end);
+function generateTanggalList(startDate, endDate) {
+  const list = [];
+  let currentDate = new Date(startDate);
 
-  while (current <= last) {
-      result.push(current.toISOString().split('T')[0]); // format YYYY-MM-DD
-      current.setDate(current.getDate() + 1);
+  while (currentDate <= new Date(endDate)) {
+      list.push(currentDate.toISOString().slice(0, 10));  // Format jadi YYYY-MM-DD
+      currentDate.setDate(currentDate.getDate() + 1);
   }
-  return result;
+
+  return list;
 }
+
 
 
 app.post("/absensi/bulanan/semuawaktu", async (req, res) => {
