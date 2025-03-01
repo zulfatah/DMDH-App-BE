@@ -593,82 +593,111 @@ app.put("/absensi", async (req, res) => {
 });
 
 //Absensi Bulanan
-app.post('/rekap-absensi', async (req, res) => {
-  const { startDate, endDate } = req.body;
+app.post("/absensi/bulanan", async (req, res) => {
+  const { startDate, endDate, kelas_id, waktu_id } = req.body;
+
+  if (!startDate || !endDate || !kelas_id || !waktu_id) {
+    return res.status(400).json({ message: "Parameter tidak lengkap" });
+  }
 
   const query = `
-      SELECT 
-          s.nama_santri,
-          DATE_FORMAT(a.tanggal, '%Y-%m-%d') AS tanggal,  -- Format langsung dari SQL
-          a.hadir, a.sakit, a.pulang, a.izin
+      SELECT a.*, s.nama AS nama_santri
       FROM absensi a
       JOIN santri s ON a.santri_id = s.id
       WHERE a.tanggal BETWEEN ? AND ?
-      ORDER BY a.tanggal, s.nama_santri
+      AND a.kelas_id = ?
+      AND a.waktu_id = ?
+      ORDER BY a.tanggal, s.nama
   `;
 
-  const [rows] = await connection.execute(query, [startDate, endDate]);
+  try {
+    const [rows] = await pool.query(query, [
+      startDate,
+      endDate,
+      kelas_id,
+      waktu_id,
+    ]);
 
-  // Buat list tanggal dari startDate - endDate
-  const tanggalList = generateTanggalList(startDate, endDate);
-  console.log("Tanggal List:", tanggalList);
+    // Debug sekali aja di awal
+    console.log("[DEBUG] Data absensi terambil:", rows.length, "records");
 
-  const rekap = {};
+    const tanggalList = generateTanggalRange(startDate, endDate);
+    console.log("[DEBUG] Tanggal range:", tanggalList);
 
-  rows.forEach(row => {
-      const nama = row.nama_santri;
-      const tanggal = row.tanggal;  // Udah langsung string dari SQL
-      console.log(`Proses: ${nama} - ${tanggal}`);
+    const rekap = {};
 
-      if (!rekap[nama]) {
-          rekap[nama] = {
-              nama,
-              tanggal: {},
-              jumlah: { H: 0, S: 0, P: 0, I: 0 }
-          };
-
-          // Inisialisasi semua tanggal sebagai "-"
-          tanggalList.forEach(tgl => {
-              rekap[nama].tanggal[tgl] = '-';
-          });
+    rows.forEach((row) => {
+      let tanggal;
+      if (typeof row.tanggal === 'string') {
+        // Kalau sudah string format tanggal, langsung potong saja
+        tanggal = row.tanggal.slice(0, 10);
+      } else {
+        // Kalau masih Date object, format ke ISO (antisipasi ORM yang auto konversi)
+        tanggal = new Date(row.tanggal).toISOString().slice(0, 10);
       }
 
-      let kode = 'H';  // default hadir
-      if (row.sakit) kode = 'S';
-      if (row.pulang) kode = 'P';
-      if (row.izin) kode = 'I';
+      const nama = row.nama_santri;
 
+      if (!rekap[nama]) {
+        rekap[nama] = {
+          nama,
+          tanggal: {},
+          jumlah: { H: 0, S: 0, P: 0, I: 0 },
+        };
+
+        // Awalnya semua tanggal kita set "-"
+        tanggalList.forEach((tgl) => {
+          rekap[nama].tanggal[tgl] = "-";
+        });
+      }
+
+      // Tentukan kode status absensi
+      let kode = "H"; // Default hadir
+      if (row.sakit) kode = "S";
+      if (row.pulang) kode = "P";
+      if (row.izin) kode = "I";
+
+      // Set absensi di tanggal tsb & update jumlah
       rekap[nama].tanggal[tanggal] = kode;
       rekap[nama].jumlah[kode]++;
-  });
+    });
 
-  const hasil = Object.values(rekap).map(item => {
+    // Konversi ke array finalResult yang mudah dibaca di frontend
+    const finalResult = Object.values(rekap).map((santri) => {
       return {
-          nama: item.nama,
-          ...item.tanggal,
-          jumlah_h: item.jumlah.H,
-          jumlah_s: item.jumlah.S,
-          jumlah_p: item.jumlah.P,
-          jumlah_i: item.jumlah.I,
+        nama: santri.nama,
+        ...tanggalList.reduce((acc, tgl) => {
+          acc[tgl] = santri.tanggal[tgl]; // Kalau gak ada tetap "-"
+          return acc;
+        }, {}),
+        jumlah_h: santri.jumlah.H,
+        jumlah_s: santri.jumlah.S,
+        jumlah_p: santri.jumlah.P,
+        jumlah_i: santri.jumlah.I,
       };
-  });
+    });
 
-  res.json(hasil);
+    res.json(finalResult);
+  } catch (err) {
+    console.error("[ERROR] Gagal query absensi:", err);
+    res.status(500).json({
+      message: "Gagal mengambil data absensi",
+      error: err.message,
+    });
+  }
 });
 
-function generateTanggalList(startDate, endDate) {
-  const list = [];
-  let currentDate = new Date(startDate);
+function generateTanggalRange(start, end) {
+  const result = [];
+  let current = new Date(start);
+  const last = new Date(end);
 
-  while (currentDate <= new Date(endDate)) {
-      list.push(currentDate.toISOString().slice(0, 10));  // Format jadi YYYY-MM-DD
-      currentDate.setDate(currentDate.getDate() + 1);
+  while (current <= last) {
+    result.push(current.toISOString().slice(0, 10));
+    current.setDate(current.getDate() + 1);
   }
-
-  return list;
+  return result;
 }
-
-
 
 app.post("/absensi/bulanan/semuawaktu", async (req, res) => {
   const { startDate, endDate, kelas_id } = req.body;
