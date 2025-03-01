@@ -468,18 +468,15 @@ app.post('/absensi/bulanan', async (req, res) => {
   try {
       const [rows] = await pool.query(query, [startDate, endDate, kelas_id, waktu_id]);
 
-      // Buat list tanggal
-      const tanggalList = generateTanggalRange(startDate, endDate);
+      const tanggalList = generateTanggalRange(startDate, endDate);  // daftar semua tanggal antara start - end
 
-      // Hitung jumlah aktif belajar
-      const jumlah_aktif_belajar = tanggalList.length;
-
-      // Struktur data awal
+      // Inisialisasi struktur data per santri
       const rekap = {};
 
-      // Inisialisasi semua santri & tanggal kosong dengan "-"
       rows.forEach(row => {
           const nama = row.nama_santri;
+          const tanggal = new Date(row.tanggal).toISOString().split('T')[0];  // Pastikan format YYYY-MM-DD
+
           if (!rekap[nama]) {
               rekap[nama] = {
                   nama,
@@ -489,32 +486,37 @@ app.post('/absensi/bulanan', async (req, res) => {
                   jumlah_i: 0,
                   tanggal: {}
               };
+
+              // Default semua tanggal jadi "-"
               tanggalList.forEach(tgl => {
                   rekap[nama].tanggal[tgl] = '-';
               });
           }
 
-          // Tentukan status absensi di tanggal tersebut
-          let status = 'H';
+          // Tentukan status absensi di tanggal ini
+          let status = 'H'; // Default hadir
           if (row.sakit) status = 'S';
           if (row.pulang) status = 'P';
           if (row.izin) status = 'I';
 
-          // Simpan status ke tanggal
-          rekap[nama].tanggal[row.tanggal] = status;
+          // Set status di tanggal itu
+          rekap[nama].tanggal[tanggal] = status;
 
-          // Hitung total jumlah H/S/P/I
+          // Hitung jumlah hadir, sakit, pulang, izin
           if (status === 'H') rekap[nama].jumlah_h++;
           if (status === 'S') rekap[nama].jumlah_s++;
           if (status === 'P') rekap[nama].jumlah_p++;
           if (status === 'I') rekap[nama].jumlah_i++;
       });
 
-      // Konversi ke format final
-      const rekap_bulanan = Object.values(rekap).map(santri => {
+      // Konversi hasil akhir ke array sesuai format yang diinginkan
+      const finalResult = Object.values(rekap).map(santri => {
           return {
               nama: santri.nama,
-              ...santri.tanggal,
+              ...tanggalList.reduce((acc, tgl) => {
+                  acc[tgl] = santri.tanggal[tgl];
+                  return acc;
+              }, {}),
               jumlah_h: santri.jumlah_h,
               jumlah_s: santri.jumlah_s,
               jumlah_p: santri.jumlah_p,
@@ -522,12 +524,7 @@ app.post('/absensi/bulanan', async (req, res) => {
           };
       });
 
-      const result = {
-          jumlah_aktif_belajar,
-          rekap_bulanan
-      };
-
-      res.json(result);
+      res.json(finalResult);
   } catch (err) {
       console.error(err);
       res.status(500).json({ message: 'Gagal mengambil data', error: err.message });
@@ -540,11 +537,12 @@ function generateTanggalRange(start, end) {
   const last = new Date(end);
 
   while (current <= last) {
-      result.push(current.toISOString().split('T')[0]);
+      result.push(current.toISOString().split('T')[0]);  // Langsung format YYYY-MM-DD
       current.setDate(current.getDate() + 1);
   }
   return result;
 }
+
 
 
 
