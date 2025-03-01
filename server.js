@@ -594,14 +594,24 @@ app.put("/absensi", async (req, res) => {
 
 //Absensi Bulanan
 app.post("/absensi/bulanan", async (req, res) => {
-  const { startDate, endDate, kelas_id, waktu_id } = req.body;
+  let { startDate, endDate, kelas_id, waktu_id } = req.body;
 
+  // Validasi parameter
   if (!startDate || !endDate || !kelas_id || !waktu_id) {
     return res.status(400).json({ message: "Parameter tidak lengkap" });
   }
 
+  // Pastikan kelas_id & waktu_id dalam format integer
+  kelas_id = parseInt(kelas_id, 10);
+  waktu_id = parseInt(waktu_id, 10);
+
+  if (isNaN(kelas_id) || isNaN(waktu_id)) {
+    return res.status(400).json({ message: "kelas_id dan waktu_id harus berupa angka" });
+  }
+
   const query = `
-      SELECT a.*, s.nama AS nama_santri
+      SELECT a.id, DATE(a.tanggal) AS tanggal, a.hadir, a.izin, a.alpa, a.pulang, a.sakit, 
+             s.nama AS nama_santri
       FROM absensi a
       JOIN santri s ON a.santri_id = s.id
       WHERE a.tanggal BETWEEN ? AND ?
@@ -611,14 +621,8 @@ app.post("/absensi/bulanan", async (req, res) => {
   `;
 
   try {
-    const [rows] = await pool.query(query, [
-      startDate,
-      endDate,
-      kelas_id,
-      waktu_id,
-    ]);
+    const [rows] = await pool.query(query, [startDate, endDate, kelas_id, waktu_id]);
 
-    // Debug sekali aja di awal
     console.log("[DEBUG] Data absensi terambil:", rows.length, "records");
 
     const tanggalList = generateTanggalRange(startDate, endDate);
@@ -627,35 +631,28 @@ app.post("/absensi/bulanan", async (req, res) => {
     const rekap = {};
 
     rows.forEach((row) => {
-      let tanggal;
-      if (typeof row.tanggal === 'string') {
-        // Kalau sudah string format tanggal, langsung potong saja
-        tanggal = row.tanggal.slice(0, 10);
-      } else {
-        // Kalau masih Date object, format ke ISO (antisipasi ORM yang auto konversi)
-        tanggal = new Date(row.tanggal).toISOString().slice(0, 10);
-      }
-
+      const tanggal = row.tanggal;
       const nama = row.nama_santri;
 
       if (!rekap[nama]) {
         rekap[nama] = {
           nama,
           tanggal: {},
-          jumlah: { H: 0, S: 0, P: 0, I: 0 },
+          jumlah: { H: 0, S: 0, P: 0, I: 0, A: 0 },
         };
 
-        // Awalnya semua tanggal kita set "-"
+        // Inisialisasi semua tanggal dengan status "-"
         tanggalList.forEach((tgl) => {
           rekap[nama].tanggal[tgl] = "-";
         });
       }
 
       // Tentukan kode status absensi
-      let kode = "H"; // Default hadir
-      if (row.sakit) kode = "S";
+      let kode = "A"; // Default Alpa
       if (row.pulang) kode = "P";
-      if (row.izin) kode = "I";
+      else if (row.sakit) kode = "S";
+      else if (row.izin) kode = "I";
+      else if (row.hadir) kode = "H";
 
       // Set absensi di tanggal tsb & update jumlah
       rekap[nama].tanggal[tanggal] = kode;
@@ -667,13 +664,14 @@ app.post("/absensi/bulanan", async (req, res) => {
       return {
         nama: santri.nama,
         ...tanggalList.reduce((acc, tgl) => {
-          acc[tgl] = santri.tanggal[tgl]; // Kalau gak ada tetap "-"
+          acc[tgl] = santri.tanggal[tgl]; // Jika tidak ada tetap "-"
           return acc;
         }, {}),
         jumlah_h: santri.jumlah.H,
         jumlah_s: santri.jumlah.S,
         jumlah_p: santri.jumlah.P,
         jumlah_i: santri.jumlah.I,
+        jumlah_a: santri.jumlah.A,
       };
     });
 
@@ -687,6 +685,7 @@ app.post("/absensi/bulanan", async (req, res) => {
   }
 });
 
+// Fungsi untuk membuat daftar tanggal antara startDate dan endDate
 function generateTanggalRange(start, end) {
   const result = [];
   let current = new Date(start);
@@ -698,6 +697,7 @@ function generateTanggalRange(start, end) {
   }
   return result;
 }
+
 
 app.post("/absensi/bulanan/semuawaktu", async (req, res) => {
   const { startDate, endDate, kelas_id } = req.body;
