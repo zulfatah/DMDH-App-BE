@@ -456,7 +456,8 @@ app.post('/absensi/bulanan', async (req, res) => {
   }
 
   const query = `
-      SELECT a.*, s.nama AS nama_santri
+      SELECT a.tanggal, a.santri_id, s.nama AS nama_santri,
+             a.hadir, a.sakit, a.pulang, a.izin
       FROM absensi a
       JOIN santri s ON a.santri_id = s.id
       WHERE a.tanggal BETWEEN ? AND ?
@@ -467,51 +468,66 @@ app.post('/absensi/bulanan', async (req, res) => {
   try {
       const [rows] = await pool.query(query, [startDate, endDate, kelas_id, waktu_id]);
 
-      // Struktur hasil yang diinginkan
+      // Buat list tanggal
       const tanggalList = generateTanggalRange(startDate, endDate);
+
+      // Hitung jumlah aktif belajar
+      const jumlah_aktif_belajar = tanggalList.length;
+
+      // Struktur data awal
       const rekap = {};
 
+      // Inisialisasi semua santri & tanggal kosong dengan "-"
       rows.forEach(row => {
           const nama = row.nama_santri;
-          const tanggal = row.tanggal;
-
           if (!rekap[nama]) {
               rekap[nama] = {
                   nama,
-                  tanggal: {},
-                  jumlah: { H: 0, S: 0, P: 0, I: 0 }
+                  jumlah_h: 0,
+                  jumlah_s: 0,
+                  jumlah_p: 0,
+                  jumlah_i: 0,
+                  tanggal: {}
               };
-
               tanggalList.forEach(tgl => {
-                  rekap[nama].tanggal[tgl] = '-'; // default kosong
+                  rekap[nama].tanggal[tgl] = '-';
               });
           }
 
-          let kode = 'H'; // default hadir
-          if (row.sakit) kode = 'S';
-          if (row.pulang) kode = 'P';
-          if (row.izin) kode = 'I';
+          // Tentukan status absensi di tanggal tersebut
+          let status = 'H';
+          if (row.sakit) status = 'S';
+          if (row.pulang) status = 'P';
+          if (row.izin) status = 'I';
 
-          rekap[nama].tanggal[tanggal] = kode;
-          rekap[nama].jumlah[kode]++;
+          // Simpan status ke tanggal
+          rekap[nama].tanggal[row.tanggal] = status;
+
+          // Hitung total jumlah H/S/P/I
+          if (status === 'H') rekap[nama].jumlah_h++;
+          if (status === 'S') rekap[nama].jumlah_s++;
+          if (status === 'P') rekap[nama].jumlah_p++;
+          if (status === 'I') rekap[nama].jumlah_i++;
       });
 
       // Konversi ke format final
-      const finalResult = Object.values(rekap).map(santri => {
+      const rekap_bulanan = Object.values(rekap).map(santri => {
           return {
               nama: santri.nama,
-              ...tanggalList.reduce((acc, tgl) => {
-                  acc[tgl] = santri.tanggal[tgl];
-                  return acc;
-              }, {}),
-              jumlah_h: santri.jumlah.H,
-              jumlah_s: santri.jumlah.S,
-              jumlah_p: santri.jumlah.P,
-              jumlah_i: santri.jumlah.I
+              ...santri.tanggal,
+              jumlah_h: santri.jumlah_h,
+              jumlah_s: santri.jumlah_s,
+              jumlah_p: santri.jumlah_p,
+              jumlah_i: santri.jumlah_i
           };
       });
 
-      res.json(finalResult);
+      const result = {
+          jumlah_aktif_belajar,
+          rekap_bulanan
+      };
+
+      res.json(result);
   } catch (err) {
       console.error(err);
       res.status(500).json({ message: 'Gagal mengambil data', error: err.message });
@@ -529,6 +545,7 @@ function generateTanggalRange(start, end) {
   }
   return result;
 }
+
 
 
 app.post('/absensi/bulanan/semuawaktu', async (req, res) => {
