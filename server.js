@@ -455,8 +455,10 @@ app.post('/absensi/bulanan', async (req, res) => {
       return res.status(400).json({ message: 'Parameter tidak lengkap' });
   }
 
+  // Query dengan DATE() agar tanggal langsung bersih
   const query = `
-      SELECT a.*, s.nama AS nama_santri
+      SELECT a.santri_id, DATE(a.tanggal) AS tanggal, s.nama AS nama_santri,
+             a.hadir, a.sakit, a.pulang, a.izin
       FROM absensi a
       JOIN santri s ON a.santri_id = s.id
       WHERE a.tanggal BETWEEN ? AND ?
@@ -467,27 +469,16 @@ app.post('/absensi/bulanan', async (req, res) => {
   try {
       const [rows] = await pool.query(query, [startDate, endDate, kelas_id, waktu_id]);
 
-      // Cek isi rows langsung
-      console.log('Raw data dari query:', rows);
+      console.log('Data hasil query:', rows); // Debug biar jelas
 
       const tanggalList = generateTanggalRange(startDate, endDate);
-      console.log('Tanggal Range:', tanggalList);
 
       const rekap = {};
 
       rows.forEach(row => {
-          // Di sini kita mau tahu apakah row.tanggal bentuknya string atau object
-          console.log('Raw tanggal dari DB:', row.tanggal, ' - typeof:', typeof row.tanggal);
-
-          const tanggal = new Date(row.tanggal).toISOString().slice(0, 10);
-console.log(`Raw tanggal dari DB:`, row.tanggal, ` - typeof:`, typeof row.tanggal);
-console.log(`Tanggal formatted (${row.nama_santri}):`, tanggal);
-
-
-          // Log hasil format-nya
-          console.log(`Tanggal formatted (${row.nama_santri}):`, tanggal);
-
           const nama = row.nama_santri;
+          const tanggal = row.tanggal; // Sudah langsung format YYYY-MM-DD dari query
+          console.log(`Proses: ${nama} - ${tanggal}`);
 
           if (!rekap[nama]) {
               rekap[nama] = {
@@ -496,12 +487,13 @@ console.log(`Tanggal formatted (${row.nama_santri}):`, tanggal);
                   jumlah: { H: 0, S: 0, P: 0, I: 0 }
               };
 
+              // Set semua tanggal defaultnya '-'
               tanggalList.forEach(tgl => {
                   rekap[nama].tanggal[tgl] = '-';
               });
           }
 
-          let kode = 'H';
+          let kode = 'H'; // default hadir
           if (row.sakit) kode = 'S';
           if (row.pulang) kode = 'P';
           if (row.izin) kode = 'I';
@@ -510,23 +502,22 @@ console.log(`Tanggal formatted (${row.nama_santri}):`, tanggal);
           rekap[nama].jumlah[kode]++;
       });
 
-      const finalResult = Object.values(rekap).map(santri => {
-          return {
-              nama: santri.nama,
-              ...tanggalList.reduce((acc, tgl) => {
-                  acc[tgl] = santri.tanggal[tgl]; // tetap '-'
-                  return acc;
-              }, {}),
-              jumlah_h: santri.jumlah.H,
-              jumlah_s: santri.jumlah.S,
-              jumlah_p: santri.jumlah.P,
-              jumlah_i: santri.jumlah.I
-          };
-      });
+      // Bentuk array finalResult
+      const finalResult = Object.values(rekap).map(santri => ({
+          nama: santri.nama,
+          ...tanggalList.reduce((acc, tgl) => {
+              acc[tgl] = santri.tanggal[tgl];  // Udah dijamin formatnya sama
+              return acc;
+          }, {}),
+          jumlah_h: santri.jumlah.H,
+          jumlah_s: santri.jumlah.S,
+          jumlah_p: santri.jumlah.P,
+          jumlah_i: santri.jumlah.I
+      }));
 
       res.json(finalResult);
   } catch (err) {
-      console.error('Error saat query:', err);
+      console.error(err);
       res.status(500).json({ message: 'Gagal mengambil data', error: err.message });
   }
 });
@@ -540,8 +531,10 @@ function generateTanggalRange(start, end) {
       result.push(current.toISOString().slice(0, 10));
       current.setDate(current.getDate() + 1);
   }
+
   return result;
 }
+
 
 
 
