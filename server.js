@@ -595,13 +595,13 @@ app.put("/absensi", async (req, res) => {
 //Absensi Bulanan
 app.post("/absensi/bulanan", async (req, res) => {
   const { startDate, endDate, kelas_id, waktu_id } = req.body;
-
+  
   if (!startDate || !endDate || !kelas_id || !waktu_id) {
     return res.status(400).json({ message: "Parameter tidak lengkap" });
   }
-
+  
   const query = `
-      SELECT a.*, s.nama AS nama_santri
+      SELECT a.*, s.nama AS nama_santri, DATE_FORMAT(a.tanggal, '%Y-%m-%d') AS tanggal_format
       FROM absensi a
       JOIN santri s ON a.santri_id = s.id
       WHERE a.tanggal BETWEEN ? AND ?
@@ -609,7 +609,7 @@ app.post("/absensi/bulanan", async (req, res) => {
       AND a.waktu_id = ?
       ORDER BY a.tanggal, s.nama
   `;
-
+  
   try {
     const [rows] = await pool.query(query, [
       startDate,
@@ -617,65 +617,60 @@ app.post("/absensi/bulanan", async (req, res) => {
       kelas_id,
       waktu_id,
     ]);
-
+    
     console.log("[DEBUG] Data absensi terambil:", rows.length, "records");
-
-    const tanggalList = generateTanggalRange(startDate, endDate);
-    console.log("[DEBUG] Tanggal range:", tanggalList);
-
+    
     const rekap = {};
-
+    
+    // Process each attendance record
     rows.forEach((row) => {
-      let tanggal = typeof row.tanggal === 'string' 
-        ? row.tanggal.slice(0, 10) 
-        : new Date(row.tanggal).toISOString().slice(0, 10);
-
+      const tanggal = row.tanggal_format;
       const nama = row.nama_santri;
-
+      
       if (!rekap[nama]) {
         rekap[nama] = {
           nama,
           tanggal: {},
-          jumlah: { H: 0, S: 0, P: 0, I: 0, A: 0 } // Semua counter
+          jumlah: { H: 0, S: 0, P: 0, I: 0, A: 0 }
         };
-
-        // Set semua tanggal jadi "-" dulu
-        tanggalList.forEach((tgl) => {
-          rekap[nama].tanggal[tgl] = "-";
-        });
       }
-
-      // Tentukan kode status absensi dari database
-      let kode = "-"; // Default kalau gak ketemu (tapi harusnya pasti ketemu)
+      
+      // Determine attendance status code
+      let kode = "-";
       if (row.hadir) kode = "H";
       else if (row.izin) kode = "I";
       else if (row.sakit) kode = "S";
       else if (row.pulang) kode = "P";
-      else if (row.alpa) kode = "A"; // Kalau benar-benar alpa dari DB
-
-      // Isi absensi di tanggal yang ditemukan
+      else if (row.alpa) kode = "A";
+      
+      // Set attendance for this date
       rekap[nama].tanggal[tanggal] = kode;
-
-      // Update jumlah hanya kalau ada data absensi (bukan "-")
+      
+      // Update count for this status
       if (kode !== "-") {
         rekap[nama].jumlah[kode]++;
       }
     });
-
-    // Konversi ke array finalResult
-    const finalResult = Object.values(rekap).map((santri) => ({
-      nama: santri.nama,
-      ...tanggalList.reduce((acc, tgl) => {
-        acc[tgl] = santri.tanggal[tgl]; // Biarkan "-" kalau memang gak ada di DB
-        return acc;
-      }, {}),
-      jumlah_h: santri.jumlah.H,
-      jumlah_s: santri.jumlah.S,
-      jumlah_p: santri.jumlah.P,
-      jumlah_i: santri.jumlah.I,
-      jumlah_a: santri.jumlah.A, // Alpa diambil hanya kalau memang tersimpan sebagai alpa di DB
-    }));
-
+    
+    // Convert to final result array with only dates that have attendance records
+    const finalResult = Object.values(rekap).map((santri) => {
+      const result = {
+        nama: santri.nama,
+        jumlah_h: santri.jumlah.H,
+        jumlah_s: santri.jumlah.S,
+        jumlah_p: santri.jumlah.P,
+        jumlah_i: santri.jumlah.I,
+        jumlah_a: santri.jumlah.A
+      };
+      
+      // Add only dates that have attendance records
+      Object.keys(santri.tanggal).forEach((tgl) => {
+        result[tgl] = santri.tanggal[tgl];
+      });
+      
+      return result;
+    });
+    
     res.json(finalResult);
   } catch (err) {
     console.error("[ERROR] Gagal query absensi:", err);
@@ -685,18 +680,6 @@ app.post("/absensi/bulanan", async (req, res) => {
     });
   }
 });
-
-function generateTanggalRange(start, end) {
-  const result = [];
-  let current = new Date(start);
-  const last = new Date(end);
-
-  while (current <= last) {
-    result.push(current.toISOString().slice(0, 10));
-    current.setDate(current.getDate() + 1);
-  }
-  return result;
-}
 
 
 
