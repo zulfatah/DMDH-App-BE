@@ -101,6 +101,54 @@ app.post("/login", async (req, res) => {
   }
 });
 
+app.get("/jadwal-ngajar", async (req, res) => {
+  const authHeader = req.headers["authorization"];
+  if (!authHeader) {
+    return res.status(401).json({ error: "Token tidak ditemukan" });
+  }
+
+  const token = authHeader.split(" ")[1]; // "Bearer <token>"
+
+  try {
+    // Verifikasi token
+    const decoded = jwt.verify(token, SECRET_KEY);
+
+    const { user_id, username, guru_id } = decoded; // ambil data dari payload token
+
+    // Ambil jadwal ngajar
+    const [jadwalRows] = await pool.query(
+      `SELECT 
+          j.id AS jadwal_id,
+          j.kelas_id,
+          j.guru_id,
+          j.waktu_id,
+          g.nama AS guru_nama,
+          k.nama AS kelas_nama,
+          w.nama AS waktu_nama
+       FROM jadwal_ngajar j
+       JOIN guru g ON j.guru_id = g.id
+       JOIN kelas k ON j.kelas_id = k.id
+       JOIN waktu w ON j.waktu_id = w.id
+       WHERE j.guru_id = ?`,
+      [guru_id]
+    );
+
+    res.json({
+      message: "Login berhasil", // sengaja samain
+      accessToken: token, // balikin tokennya lagi (opsional)
+      user: {
+        id: user_id,
+        username: username,
+        guru_id: guru_id,
+      },
+      jadwal_ngajar: jadwalRows,
+    });
+
+  } catch (error) {
+    return res.status(403).json({ error: "Token tidak valid atau expired" });
+  }
+});
+
 
 app.post("/register/bulk", async (req, res) => {
   const users = req.body.users; // Expect array of users
