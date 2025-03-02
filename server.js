@@ -1,4 +1,5 @@
 require("dotenv").config();
+const jwt = require("jsonwebtoken");
 const express = require("express");
 const mysql = require("mysql2/promise"); // Gunakan mysql2 dengan async/await
 const cors = require("cors");
@@ -10,6 +11,7 @@ const port = process.env.PORT || 3002;
 app.use(cors());
 app.use(express.json());
 
+const SECRET_KEY = process.env.JWT_SECRET || "rahasia-super-aman"; 
 // Koneksi ke MySQL menggunakan mysql2/promise
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
@@ -40,24 +42,22 @@ app.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Username atau password salah" });
     }
 
-    const user = userRows[0]; // Dapatkan data user
+    const user = userRows[0]; 
     const user_id = user.id;
 
-    // Cek apakah user ini adalah seorang guru
+    // Cek apakah user seorang guru
     const [guruRows] = await pool.query(
       "SELECT id FROM guru WHERE user_id = ?",
       [user_id]
     );
 
     if (guruRows.length === 0) {
-      return res
-        .status(403)
-        .json({ error: "User ini bukan seorang guru", user, user_id });
+      return res.status(403).json({ error: "User ini bukan seorang guru" });
     }
 
     const guru_id = guruRows[0].id;
 
-    // Ambil jadwal_ngajar berdasarkan guru_id
+    // Ambil jadwal ngajar
     const [jadwalRows] = await pool.query(
       `SELECT 
           j.id AS jadwal_id,
@@ -75,8 +75,20 @@ app.post("/login", async (req, res) => {
       [guru_id]
     );
 
+    // 🛡️ Buat token JWT
+    const accessToken = jwt.sign(
+      {
+        user_id: user_id,
+        username: user.username,
+        guru_id: guru_id,
+      },
+      SECRET_KEY,
+      { expiresIn: "2h" } 
+    );
+
     res.json({
       message: "Login berhasil",
+      accessToken,
       user: {
         id: user_id,
         username: user.username,
@@ -89,46 +101,6 @@ app.post("/login", async (req, res) => {
   }
 });
 
-// **1️⃣ API Daftar User**
-app.post("/register", async (req, res) => {
-  const { username, password, isGuru, namaGuru } = req.body;
-
-  if (!username || !password) {
-    return res.status(400).json({ error: "Username dan password wajib diisi" });
-  }
-
-  try {
-    // Cek apakah username sudah ada
-    const [existingUsers] = await pool.query(
-      "SELECT id FROM users WHERE username = ?",
-      [username]
-    );
-
-    if (existingUsers.length > 0) {
-      return res.status(400).json({ error: "Username sudah digunakan" });
-    }
-
-    // Insert user baru ke tabel users
-    const [userResult] = await pool.query(
-      "INSERT INTO users (username, password) VALUES (?, ?)",
-      [username, password]
-    );
-
-    const userId = userResult.insertId; // ID user yang baru dibuat
-
-    // Jika user juga seorang guru, tambahkan ke tabel guru
-    if (isGuru && namaGuru) {
-      await pool.query("INSERT INTO guru (nama, user_id) VALUES (?, ?)", [
-        namaGuru,
-        userId,
-      ]);
-    }
-
-    res.status(201).json({ message: "Pendaftaran berhasil", user_id: userId });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 app.post("/register/bulk", async (req, res) => {
   const users = req.body.users; // Expect array of users
