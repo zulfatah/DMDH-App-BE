@@ -379,6 +379,18 @@ app.post("/kelas", async (req, res) => {
   }
 });
 
+app.get("/kelas", async (req, res) => {
+  try {
+    const sql = "SELECT * FROM kelas";
+    const [rows] = await pool.query(sql);
+
+    res.status(200).json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 // Bulk insert ke tabel Guru
 app.post("/guru", async (req, res) => {
   try {
@@ -448,6 +460,18 @@ app.post("/waktu", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+app.get("/waktu", async (req, res) => {
+  try {
+    const sql = "SELECT * FROM waktu";
+    const [rows] = await pool.query(sql);
+
+    res.status(200).json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // ✅ INSERT DATA ABSENSI (Mencegah Duplikasi)
 app.post("/absensi", async (req, res) => {
