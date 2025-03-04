@@ -738,6 +738,87 @@ app.post("/absensi/bulanan", async (req, res) => {
   }
 });
 
+app.post("/absensi/bulanan/rekap", async (req, res) => {
+  const { startDate, endDate, kelas_id, waktu_id } = req.body;
+
+  if (!startDate || !endDate || !kelas_id || !waktu_id) {
+      return res.status(400).json({ message: "Parameter tidak lengkap" });
+  }
+
+  const query = `
+      SELECT a.*, s.nama AS nama_santri, w.nama AS nama_waktu
+      FROM absensi a
+      JOIN santri s ON a.santri_id = s.id
+      JOIN waktu w ON a.waktu_id = w.id
+      WHERE a.tanggal BETWEEN ? AND ?
+      AND a.kelas_id = ?
+      AND a.waktu_id = ?
+      ORDER BY s.nama, w.nama
+  `;
+
+  try {
+      const [rows] = await pool.query(query, [startDate, endDate, kelas_id, waktu_id]);
+
+      // Struktur data rekap per santri
+      const rekap = {};
+
+      rows.forEach((row) => {
+          const nama = row.nama_santri;
+          const namaWaktu = row.nama_waktu.toLowerCase();  // Biar konsisten (malam, subuh, etc)
+
+          if (!rekap[nama]) {
+              rekap[nama] = {
+                  nama,
+                  total: [0, 0, 0, 0, 0]  // [S, P, A, I, H]
+              };
+          }
+
+          // Pastikan ada array absensi untuk namaWaktu ini
+          if (!rekap[nama][namaWaktu]) {
+              rekap[nama][namaWaktu] = [0, 0, 0, 0, 0];  // [S, P, A, I, H]
+          }
+
+          // Isi data absensi ke array
+          if (row.sakit) {
+              rekap[nama][namaWaktu][0]++;
+              rekap[nama].total[0]++;
+          } else if (row.pulang) {
+              rekap[nama][namaWaktu][1]++;
+              rekap[nama].total[1]++;
+          } else if (row.alpa) {
+              rekap[nama][namaWaktu][2]++;
+              rekap[nama].total[2]++;
+          } else if (row.izin) {
+              rekap[nama][namaWaktu][3]++;
+              rekap[nama].total[3]++;
+          } else if (row.hadir) {
+              rekap[nama][namaWaktu][4]++;
+              rekap[nama].total[4]++;
+          }
+      });
+
+      // Konversi ke array dengan nomor urut
+      const result = Object.values(rekap).map((santri, index) => ({
+          no: index + 1,
+          nama: santri.nama,
+          malam: santri.malam || [0, 0, 0, 0, 0],
+          subuh: santri.subuh || [0, 0, 0, 0, 0],
+          dhuha: santri.dhuha || [0, 0, 0, 0, 0],
+          zuhur: santri.zuhur || [0, 0, 0, 0, 0],
+          total: santri.total
+      }));
+
+      res.json(result);
+  } catch (err) {
+      console.error("[ERROR] Gagal query absensi:", err);
+      res.status(500).json({
+          message: "Gagal mengambil data absensi",
+          error: err.message,
+      });
+  }
+});
+
+
 function generateTanggalRange(start, end) {
   const result = [];
   let current = new Date(start);
