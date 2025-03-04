@@ -973,7 +973,7 @@ app.post('/bulanan/rekapcawu', async (req, res) => {
       // Query ambil data absensi rentang waktu & kelas tertentu
       const query = `
           SELECT santri.nama, 
-                 MONTH(STR_TO_DATE(tanggal, '%Y-%m-%d')) AS bulan,
+                 MONTH(tanggal) AS bulan,
                  SUM(hadir) AS hadir, 
                  SUM(izin) AS izin, 
                  SUM(alpa) AS alpa, 
