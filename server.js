@@ -3,7 +3,7 @@ const jwt = require("jsonwebtoken");
 const express = require("express");
 const mysql = require("mysql2/promise"); // Gunakan mysql2 dengan async/await
 const cors = require("cors");
-
+const moment = require("moment-hijri");
 const app = express();
 const port = process.env.PORT || 3002;
 
@@ -837,6 +837,134 @@ function generateTanggalRange(start, end) {
   }
   return result;
 }
+
+app.post("/absensi/bulanan/rekapcawu", async (req, res) => { 
+  const { startDate, endDate, kelas_id } = req.body;
+
+  if (!startDate || !endDate || !kelas_id) {
+      return res.status(400).json({ message: "Parameter tidak lengkap" });
+  }
+
+  const query = `
+      SELECT a.*, s.nama AS nama_santri, w.nama AS nama_waktu, MONTH(a.tanggal) AS bulan
+      FROM absensi a
+      JOIN santri s ON a.santri_id = s.id
+      JOIN waktu w ON a.waktu_id = w.id
+      WHERE a.tanggal BETWEEN ? AND ?
+      AND a.kelas_id = ?
+      ORDER BY s.nama, a.tanggal, w.nama
+  `;
+
+  try {
+      const [rows] = await pool.query(query, [startDate, endDate, kelas_id]);
+
+      if (rows.length === 0) {
+          return res.json({ message: "Tidak ada data absensi untuk periode dan kelas ini", data: [] });
+      }
+
+      // Mapping nomor bulan ke nama bulan hijriah yang aman
+      const bulanHijriahMap = {
+          1: "muharram",
+          2: "safar",
+          3: "rabiul_awwal",
+          4: "rabiul_akhir",
+          5: "jumadal_ula",
+          6: "jumadal_akhirah",
+          7: "rajab",
+          8: "syaban",
+          9: "ramadhan",
+          10: "syawwal",
+          11: "dzulqadah",
+          12: "dzulhijjah"
+      };
+
+      const rekap = {};
+
+      rows.forEach((row) => {
+          const nama = row.nama_santri;
+          const bulanKey = bulanHijriahMap[row.bulan];  // Konversi bulan ke nama hijriah aman
+          const namaWaktu = row.nama_waktu.trim().toLowerCase();
+
+          if (!rekap[nama]) {
+              rekap[nama] = {
+                  nama,
+                  muharram: [0, 0, 0, 0, 0],
+                  safar: [0, 0, 0, 0, 0],
+                  rabiul_awwal: [0, 0, 0, 0, 0],
+                  rabiul_akhir: [0, 0, 0, 0, 0],
+                  jumadal_ula: [0, 0, 0, 0, 0],
+                  jumadal_akhirah: [0, 0, 0, 0, 0],
+                  rajab: [0, 0, 0, 0, 0],
+                  syaban: [0, 0, 0, 0, 0],
+                  ramadhan: [0, 0, 0, 0, 0],
+                  syawwal: [0, 0, 0, 0, 0],
+                  dzulqadah: [0, 0, 0, 0, 0],
+                  dzulhijjah: [0, 0, 0, 0, 0],
+                  total: [0, 0, 0, 0, 0]
+              };
+          }
+
+          if (!rekap[nama][bulanKey]) {
+              rekap[nama][bulanKey] = [0, 0, 0, 0, 0];
+          }
+
+          if (row.sakit) {
+              rekap[nama][bulanKey][0]++;
+              rekap[nama].total[0]++;
+          } else if (row.pulang) {
+              rekap[nama][bulanKey][1]++;
+              rekap[nama].total[1]++;
+          } else if (row.alpa) {
+              rekap[nama][bulanKey][2]++;
+              rekap[nama].total[2]++;
+          } else if (row.izin) {
+              rekap[nama][bulanKey][3]++;
+              rekap[nama].total[3]++;
+          } else if (row.hadir) {
+              rekap[nama][bulanKey][4]++;
+              rekap[nama].total[4]++;
+          }
+      });
+
+      const result = Object.values(rekap).map((santri, index) => {
+          const totalHadir = santri.total[4];
+          const totalSemua = santri.total.reduce((sum, val) => sum + val, 0);
+
+          const persenHadir = totalSemua > 0 ? ((totalHadir / totalSemua) * 100).toFixed(2) + " %" : "0 %";
+          const persenTidakHadir = totalSemua > 0 ? ((totalSemua - totalHadir) / totalSemua * 100).toFixed(2) + " %" : "0 %";
+
+          return {
+              no: index + 1,
+              nama: santri.nama,
+              muharram: santri.muharram,
+              safar: santri.safar,
+              rabiul_awwal: santri.rabiul_awwal,
+              rabiul_akhir: santri.rabiul_akhir,
+              jumadal_ula: santri.jumadal_ula,
+              jumadal_akhirah: santri.jumadal_akhirah,
+              rajab: santri.rajab,
+              syaban: santri.syaban,
+              ramadhan: santri.ramadhan,
+              syawwal: santri.syawwal,
+              dzulqadah: santri.dzulqadah,
+              dzulhijjah: santri.dzulhijjah,
+              total: [persenHadir, persenTidakHadir]
+          };
+      });
+
+      res.json({ message: "Berhasil mengambil data absensi", data: result });
+  } catch (err) {
+      console.error("[ERROR] Gagal query absensi:", err, {
+          query,
+          params: [startDate, endDate, kelas_id]
+      });
+
+      res.status(500).json({
+          message: "Gagal mengambil data absensi",
+          error: err.message,
+      });
+  }
+});
 
 
 
