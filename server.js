@@ -739,9 +739,9 @@ app.post("/absensi/bulanan", async (req, res) => {
 });
 
 app.post("/absensi/bulanan/rekap", async (req, res) => {
-  const { startDate, endDate, kelas_id, waktu_id } = req.body;
+  const { startDate, endDate, kelas_id } = req.body;
 
-  if (!startDate || !endDate || !kelas_id || !waktu_id) {
+  if (!startDate || !endDate || !kelas_id) {
       return res.status(400).json({ message: "Parameter tidak lengkap" });
   }
 
@@ -752,33 +752,33 @@ app.post("/absensi/bulanan/rekap", async (req, res) => {
       JOIN waktu w ON a.waktu_id = w.id
       WHERE a.tanggal BETWEEN ? AND ?
       AND a.kelas_id = ?
-      AND a.waktu_id = ?
       ORDER BY s.nama, w.nama
   `;
 
   try {
-      const [rows] = await pool.query(query, [startDate, endDate, kelas_id, waktu_id]);
+      const [rows] = await pool.query(query, [startDate, endDate, kelas_id]);
 
-      // Struktur data rekap per santri
+      if (rows.length === 0) {
+          return res.json({ message: "Tidak ada data absensi untuk periode dan kelas ini", data: [] });
+      }
+
       const rekap = {};
 
       rows.forEach((row) => {
           const nama = row.nama_santri;
-          const namaWaktu = row.nama_waktu.toLowerCase();  // Biar konsisten (malam, subuh, etc)
+          const namaWaktu = row.nama_waktu.trim().toLowerCase();
 
           if (!rekap[nama]) {
               rekap[nama] = {
                   nama,
-                  total: [0, 0, 0, 0, 0]  // [S, P, A, I, H]
+                  total: [0, 0, 0, 0, 0]
               };
           }
 
-          // Pastikan ada array absensi untuk namaWaktu ini
           if (!rekap[nama][namaWaktu]) {
-              rekap[nama][namaWaktu] = [0, 0, 0, 0, 0];  // [S, P, A, I, H]
+              rekap[nama][namaWaktu] = [0, 0, 0, 0, 0];
           }
 
-          // Isi data absensi ke array
           if (row.sakit) {
               rekap[nama][namaWaktu][0]++;
               rekap[nama].total[0]++;
@@ -797,7 +797,6 @@ app.post("/absensi/bulanan/rekap", async (req, res) => {
           }
       });
 
-      // Konversi ke array dengan nomor urut
       const result = Object.values(rekap).map((santri, index) => ({
           no: index + 1,
           nama: santri.nama,
@@ -805,18 +804,26 @@ app.post("/absensi/bulanan/rekap", async (req, res) => {
           subuh: santri.subuh || [0, 0, 0, 0, 0],
           dhuha: santri.dhuha || [0, 0, 0, 0, 0],
           zuhur: santri.zuhur || [0, 0, 0, 0, 0],
+          ashar: santri.ashar || [0, 0, 0, 0, 0],
+          maghrib: santri.maghrib || [0, 0, 0, 0, 0],
+          isya: santri.isya || [0, 0, 0, 0, 0],
           total: santri.total
       }));
 
-      res.json(result);
+      res.json({ message: "Berhasil mengambil data absensi", data: result });
   } catch (err) {
-      console.error("[ERROR] Gagal query absensi:", err);
+      console.error("[ERROR] Gagal query absensi:", err, {
+          query,
+          params: [startDate, endDate, kelas_id]
+      });
+
       res.status(500).json({
           message: "Gagal mengambil data absensi",
           error: err.message,
       });
   }
 });
+
 
 
 function generateTanggalRange(start, end) {
