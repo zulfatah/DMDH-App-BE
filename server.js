@@ -970,44 +970,60 @@ app.post('/bulanan/rekapcawu', async (req, res) => {
   try {
       const { startDate, endDate, kelas_id } = req.body;
 
-      // Query ambil data absensi rentang waktu & kelas tertentu
+      // Validate input
+      if (!startDate || !endDate || !kelas_id) {
+          return res.status(400).json({ message: 'Parameter tidak lengkap' });
+      }
+
+      // Improved query with parameterized input and more efficient grouping
       const query = `
-          SELECT santri.nama, 
-                 MONTH(tanggal) AS bulan,
-                 SUM(hadir) AS hadir, 
-                 SUM(izin) AS izin, 
-                 SUM(alpa) AS alpa, 
-                 SUM(pulang) AS pulang, 
-                 SUM(sakit) AS sakit
+          SELECT 
+              santri.nama,
+              MONTH(tanggal) as bulan,
+              SUM(CASE WHEN status = 'hadir' THEN 1 ELSE 0 END) AS hadir,
+              SUM(CASE WHEN status = 'izin' THEN 1 ELSE 0 END) AS izin,
+              SUM(CASE WHEN status = 'alpa' THEN 1 ELSE 0 END) AS alpa,
+              SUM(CASE WHEN status = 'pulang' THEN 1 ELSE 0 END) AS pulang,
+              SUM(CASE WHEN status = 'sakit' THEN 1 ELSE 0 END) AS sakit
           FROM absensi
           JOIN santri ON santri.id = absensi.santri_id
-          WHERE tanggal BETWEEN ? AND ? 
+          WHERE tanggal BETWEEN ? AND ?
           AND kelas_id = ?
-          GROUP BY santri_id, bulan
-          ORDER BY santri.nama, bulan;
+          GROUP BY santri.nama, MONTH(tanggal)
+          ORDER BY santri.nama, bulan
       `;
 
       const [rows] = await db.query(query, [startDate, endDate, kelas_id]);
 
-      // Struktur data untuk frontend
+      // Improved data processing function
       const hasil = prosesDataRekap(rows);
 
       res.json({ data: hasil });
-
   } catch (error) {
-      console.error('Error:', error.message);
-      res.status(500).json({ message: 'Gagal ambil data' });
+      console.error('Error dalam endpoint rekapcawu:', error);
+      res.status(500).json({ 
+          message: 'Gagal mengambil data',
+          error: process.env.NODE_ENV === 'development' ? error.message : undefined 
+      });
   }
 });
 
 function prosesDataRekap(rows) {
-  const mapSantri = {};
+  const hijriMonthMap = {
+      1: 'muharam', 2: 'safar', 3: 'rabiulawal', 4: 'rabiulakhir',
+      5: 'jumadilawal', 6: 'jumadilakhir', 7: 'rajab', 8: 'syaaban',
+      9: 'ramadhan', 10: 'syawal', 11: 'dzulqadah', 12: 'dzulhijjah'
+  };
+
+  // Use Map for more efficient data storage
+  const mapSantri = new Map();
 
   rows.forEach(row => {
-      if (!mapSantri[row.nama]) {
-          mapSantri[row.nama] = {
+      // Ensure the santri entry exists
+      if (!mapSantri.has(row.nama)) {
+          mapSantri.set(row.nama, {
               nama: row.nama,
-              muharam: [0, 0, 0, 0, 0],  // S, P, A, I, H
+              muharam: [0, 0, 0, 0, 0],
               safar: [0, 0, 0, 0, 0],
               rabiulawal: [0, 0, 0, 0, 0],
               rabiulakhir: [0, 0, 0, 0, 0],
@@ -1019,30 +1035,31 @@ function prosesDataRekap(rows) {
               syawal: [0, 0, 0, 0, 0],
               dzulqadah: [0, 0, 0, 0, 0],
               dzulhijjah: [0, 0, 0, 0, 0],
-              total: [0, 0] // hadir, tak hadir
-          };
+              total: [0, 0]
+          });
       }
 
-      const hijriMonthMap = {
-          1: 'muharam', 2: 'safar', 3: 'rabiulawal', 4: 'rabiulakhir',
-          5: 'jumadilawal', 6: 'jumadilakhir', 7: 'rajab', 8: 'syaaban',
-          9: 'ramadhan', 10: 'syawal', 11: 'dzulqadah', 12: 'dzulhijjah'
-      };
-
+      const santriData = mapSantri.get(row.nama);
       const bulanKey = hijriMonthMap[row.bulan];
-      if (bulanKey) {
-          mapSantri[row.nama][bulanKey] = [
-              row.sakit, row.pulang, row.alpa, row.izin, row.hadir
-          ];
-      }
 
-      // Total akumulasi per santri
-      mapSantri[row.nama].total[0] += row.hadir;
-      mapSantri[row.nama].total[1] += (row.izin + row.alpa + row.sakit);
+      if (bulanKey) {
+          // Order: Sakit, Pulang, Alpa, Izin, Hadir
+          santriData[bulanKey] = [
+              row.sakit, 
+              row.pulang, 
+              row.alpa, 
+              row.izin, 
+              row.hadir
+          ];
+
+          // Update total counts
+          santriData.total[0] += row.hadir;
+          santriData.total[1] += (row.izin + row.alpa + row.sakit);
+      }
   });
 
-  // Ubah jadi array biar enak di-loop di frontend
-  return Object.values(mapSantri).map((data, index) => ({
+  // Convert Map to array with index
+  return Array.from(mapSantri.values()).map((data, index) => ({
       no: index + 1,
       ...data
   }));
