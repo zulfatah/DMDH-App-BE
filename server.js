@@ -1254,6 +1254,117 @@ app.post('/rekapcawu', async (req, res) => {
   }
 });
 
+const hijriMonths = {
+  1: 'Muharram',
+  2: 'Safar',
+  3: 'Rabiul Awal',
+  4: 'Rabiul Akhir',
+  5: 'Jumadil Awal',
+  6: 'Jumadil Akhir',
+  7: 'Rajab',
+  8: 'Sya\'ban',
+  9: 'Ramadhan',
+  10: 'Syawal',
+  11: 'Dzulqa\'dah',
+  12: 'Dzulhijjah',
+};
+
+app.post('/rekapcawuv2', async (req, res) => {
+  const { startDate, endDate, kelas_id } = req.body;
+
+  try {
+      const startHijri = moment(startDate, 'YYYY-MM-DD').startOf('day');
+      const endHijri = moment(endDate, 'YYYY-MM-DD').endOf('day');
+
+      const months = [];
+      let current = startHijri.clone();
+
+      while (current.isBefore(endHijri) || current.isSame(endHijri)) {
+          const monthNumber = current.iMonth() + 1;
+          const monthName = hijriMonths[monthNumber];
+          const year = current.iYear();
+
+          const monthStart = moment(current).startOf('iMonth').format('YYYY-MM-DD');
+          const monthEnd = moment(current).endOf('iMonth').format('YYYY-MM-DD');
+
+          months.push({
+              monthNumber,
+              monthName,
+              year,
+              startDate: monthStart,
+              endDate: monthEnd,
+          });
+
+          current.add(1, 'iMonth');
+      }
+
+      const results = [];
+
+      for (const month of months) {
+          const [rows] = await pool.query(`
+              SELECT 
+                  a.santri_id,
+                  s.nama AS nama_santri,
+                  SUM(a.hadir) AS hadir,
+                  SUM(a.sakit) AS sakit,
+                  SUM(a.pulang) AS pulang,
+                  SUM(a.alpa) AS alpa,
+                  SUM(a.izin) AS izin
+              FROM absensi a
+              JOIN santri s ON a.santri_id = s.id
+              WHERE a.tanggal BETWEEN ? AND ?
+              AND a.kelas_id = ?
+              GROUP BY a.santri_id, s.nama
+          `, [month.startDate, month.endDate, kelas_id]);
+
+          rows.forEach(row => {
+              let existing = results.find(r => r.santri_id === row.santri_id);
+
+              if (!existing) {
+                  existing = {
+                      santri_id: row.santri_id,
+                      nama: row.nama_santri,
+                      total: [0, 0], // [totalHadir, totalTakHadir]
+                  };
+                  results.push(existing);
+              }
+
+              const hadir = Number(row.hadir) || 0;
+              const sakit = Number(row.sakit) || 0;
+              const pulang = Number(row.pulang) || 0;
+              const alpa = Number(row.alpa) || 0;
+              const izin = Number(row.izin) || 0;
+
+              existing[month.monthName] = [hadir, sakit, pulang, alpa, izin];
+
+              // Total per santri (total hadir & total tidak hadir)
+              existing.total[0] += hadir;
+              existing.total[1] += (sakit + pulang + alpa + izin);
+          });
+
+          // Kalau bulan ini kosong, tetap tambahkan entry kosong biar konsisten
+          results.forEach(r => {
+              if (!r[month.monthName]) {
+                  r[month.monthName] = [0, 0, 0, 0, 0];
+              }
+          });
+      }
+
+      res.json({
+          success: true,
+          data: results,
+      });
+
+  } catch (error) {
+      console.error(error);
+      res.status(500).json({
+          success: false,
+          message: 'Terjadi kesalahan saat mengambil data',
+          error: error.message,
+      });
+  }
+});
+
 // Jalankan server
 app.listen(port, "0.0.0.0", () => {
   console.log(`Server running on http://0.0.0.0:${port}`);
