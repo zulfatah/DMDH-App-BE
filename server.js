@@ -1350,6 +1350,16 @@ app.post('/rekapcawuv2', async (req, res) => {
           });
       }
 
+       // Setelah semua bulan diproses, ubah total jadi persen
+       results.forEach(r => {
+        const totalHari = r.total[0] + r.total[1];
+
+        const persenHadir = totalHari > 0 ? ((r.total[0] / totalHari) * 100).toFixed(0) + ' %' : '0 %';
+        const persenTidakHadir = totalHari > 0 ? ((r.total[1] / totalHari) * 100).toFixed(0) + ' %' : '0 %';
+
+        r.total = [persenHadir, persenTidakHadir];
+    });
+
       res.json({
           success: true,
           data: results,
