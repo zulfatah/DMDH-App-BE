@@ -3,7 +3,8 @@ const jwt = require("jsonwebtoken");
 const express = require("express");
 const mysql = require("mysql2/promise"); // Gunakan mysql2 dengan async/await
 const cors = require("cors");
-const moment = require("moment-hijri");
+const moment = require('moment');
+require('moment-hijri');
 const app = express();
 const port = process.env.PORT || 3002;
 
@@ -1158,37 +1159,36 @@ app.post('/rekapcawu', async (req, res) => {
   const { startDate, endDate, kelas_id } = req.body;
 
   try {
-      // Konversi start dan end ke hijriah
-      const startHijri = moment(startDate, 'YYYY-MM-DD');
-      const endHijri = moment(endDate, 'YYYY-MM-DD');
+      const hijriMonths = [];
+      let current = moment(startDate, 'YYYY-MM-DD');
 
-      const months = [];
-      let current = startHijri.clone();
+      while (current.isBefore(endDate) || current.isSame(endDate)) {
+          const monthName = current.format('iMMMM');
+          const monthNumber = current.iMonth() + 1;
+          const year = current.iYear();
 
-      // Ambil daftar bulan hijriah di antara start dan end
-      while (current.isBefore(endHijri) || current.isSame(endHijri)) {
-          const monthName = current.format('iMMMM'); // nama bulan hijriah
-          const monthNumber = current.iMonth() + 1; // bulan ke berapa
-          const year = current.iYear(); // tahun hijriah
+          // Konversi bulan Hijriah ke range Masehi
+          const hijriStart = moment(`${year}-${monthNumber}-1`, 'iYYYY-iM-iD');
+          const hijriEnd = hijriStart.clone().endOf('iMonth');
 
-          const monthStart = moment(`${year}-${monthNumber}-1`, 'iYYYY-iM-iD').format('YYYY-MM-DD');
-          const monthEnd = moment(monthStart, 'YYYY-MM-DD').endOf('iMonth').format('YYYY-MM-DD');
-
-          months.push({
+          hijriMonths.push({
               monthName,
-              monthNumber,
-              year,
-              monthStart,
-              monthEnd,
+              hijriStart,
+              hijriEnd,
+              startDate: hijriStart.format('YYYY-MM-DD'),
+              endDate: hijriEnd.format('YYYY-MM-DD'),
           });
 
-          current.add(1, 'iMonth');
+          current = hijriEnd.clone().add(1, 'day'); // loncat ke awal bulan Hijriah berikutnya
       }
 
-      // Query per bulan
+      console.log('Hijri Months Mapping:', hijriMonths); // Debugging
+
       const results = [];
 
-      for (const month of months) {
+      for (const month of hijriMonths) {
+          console.log(`Querying for month: ${month.monthName}, Range: ${month.startDate} - ${month.endDate}`);
+
           const [rows] = await pool.query(`
               SELECT 
                   a.santri_id,
@@ -1203,16 +1203,17 @@ app.post('/rekapcawu', async (req, res) => {
               WHERE a.tanggal BETWEEN ? AND ?
               AND a.kelas_id = ?
               GROUP BY a.santri_id, s.nama
-          `, [month.monthStart, month.monthEnd, kelas_id]);
+          `, [month.startDate, month.endDate, kelas_id]);
 
           rows.forEach(row => {
               const existing = results.find(r => r.santri_id === row.santri_id);
+
               if (!existing) {
                   results.push({
                       santri_id: row.santri_id,
                       nama: row.nama_santri,
                       [month.monthName.toLowerCase()]: [row.hadir, row.sakit, row.pulang, row.alpa, row.izin],
-                      total: [0, 0], // total akan dihitung belakangan
+                      total: [0, 0], // nanti hitung total
                   });
               } else {
                   existing[month.monthName.toLowerCase()] = [row.hadir, row.sakit, row.pulang, row.alpa, row.izin];
@@ -1220,18 +1221,18 @@ app.post('/rekapcawu', async (req, res) => {
           });
       }
 
-      // Hitung total hadir + tak hadir
+      // Hitung total hadir dan tidak hadir
       results.forEach(row => {
           let totalHadir = 0;
           let totalTakHadir = 0;
 
-          months.forEach(({ monthName }) => {
-              const bulanKey = monthName.toLowerCase();
-              if (row[bulanKey]) {
-                  totalHadir += row[bulanKey][0]; // hadir
-                  totalTakHadir += row[bulanKey][1] + row[bulanKey][2] + row[bulanKey][3] + row[bulanKey][4]; // sakit, pulang, alpa, izin
+          hijriMonths.forEach(({ monthName }) => {
+              const key = monthName.toLowerCase();
+              if (row[key]) {
+                  totalHadir += row[key][0]; // hadir
+                  totalTakHadir += row[key][1] + row[key][2] + row[key][3] + row[key][4]; // sakit, pulang, alpa, izin
               } else {
-                  row[bulanKey] = [0, 0, 0, 0, 0]; // kalau ga ada, kasih 0 semua
+                  row[key] = [0, 0, 0, 0, 0]; // default 0 jika tidak ada data
               }
           });
 
@@ -1244,7 +1245,7 @@ app.post('/rekapcawu', async (req, res) => {
       });
 
   } catch (error) {
-      console.error(error);
+      console.error('Error:', error);
       res.status(500).json({
           success: false,
           message: 'Terjadi kesalahan saat mengambil data',
