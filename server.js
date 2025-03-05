@@ -1189,7 +1189,7 @@ app.post('/rekapcawu', async (req, res) => {
       const results = [];
 
       for (const month of months) {
-          const [rows] = await db.query(`
+          const [rows] = await pool.query(`
               SELECT 
                   a.santri_id,
                   s.nama AS nama_santri,
