@@ -1154,6 +1154,105 @@ app.post("/absensi/bulanan/semuawaktu", async (req, res) => {
   } 
 });
 
+app.post('/rekapcawu', async (req, res) => {
+  const { startDate, endDate, kelas_id } = req.body;
+
+  try {
+      // Konversi start dan end ke hijriah
+      const startHijri = moment(startDate, 'YYYY-MM-DD');
+      const endHijri = moment(endDate, 'YYYY-MM-DD');
+
+      const months = [];
+      let current = startHijri.clone();
+
+      // Ambil daftar bulan hijriah di antara start dan end
+      while (current.isBefore(endHijri) || current.isSame(endHijri)) {
+          const monthName = current.format('iMMMM'); // nama bulan hijriah
+          const monthNumber = current.iMonth() + 1; // bulan ke berapa
+          const year = current.iYear(); // tahun hijriah
+
+          const monthStart = moment(`${year}-${monthNumber}-1`, 'iYYYY-iM-iD').format('YYYY-MM-DD');
+          const monthEnd = moment(monthStart, 'YYYY-MM-DD').endOf('iMonth').format('YYYY-MM-DD');
+
+          months.push({
+              monthName,
+              monthNumber,
+              year,
+              monthStart,
+              monthEnd,
+          });
+
+          current.add(1, 'iMonth');
+      }
+
+      // Query per bulan
+      const results = [];
+
+      for (const month of months) {
+          const [rows] = await db.query(`
+              SELECT 
+                  a.santri_id,
+                  s.nama AS nama_santri,
+                  SUM(a.hadir) AS hadir,
+                  SUM(a.sakit) AS sakit,
+                  SUM(a.pulang) AS pulang,
+                  SUM(a.alpa) AS alpa,
+                  SUM(a.izin) AS izin
+              FROM absensi a
+              JOIN santri s ON a.santri_id = s.id
+              WHERE a.tanggal BETWEEN ? AND ?
+              AND a.kelas_id = ?
+              GROUP BY a.santri_id, s.nama
+          `, [month.monthStart, month.monthEnd, kelas_id]);
+
+          rows.forEach(row => {
+              const existing = results.find(r => r.santri_id === row.santri_id);
+              if (!existing) {
+                  results.push({
+                      santri_id: row.santri_id,
+                      nama: row.nama_santri,
+                      [month.monthName.toLowerCase()]: [row.hadir, row.sakit, row.pulang, row.alpa, row.izin],
+                      total: [0, 0], // total akan dihitung belakangan
+                  });
+              } else {
+                  existing[month.monthName.toLowerCase()] = [row.hadir, row.sakit, row.pulang, row.alpa, row.izin];
+              }
+          });
+      }
+
+      // Hitung total hadir + tak hadir
+      results.forEach(row => {
+          let totalHadir = 0;
+          let totalTakHadir = 0;
+
+          months.forEach(({ monthName }) => {
+              const bulanKey = monthName.toLowerCase();
+              if (row[bulanKey]) {
+                  totalHadir += row[bulanKey][0]; // hadir
+                  totalTakHadir += row[bulanKey][1] + row[bulanKey][2] + row[bulanKey][3] + row[bulanKey][4]; // sakit, pulang, alpa, izin
+              } else {
+                  row[bulanKey] = [0, 0, 0, 0, 0]; // kalau ga ada, kasih 0 semua
+              }
+          });
+
+          row.total = [totalHadir, totalTakHadir];
+      });
+
+      res.json({
+          success: true,
+          data: results,
+      });
+
+  } catch (error) {
+      console.error(error);
+      res.status(500).json({
+          success: false,
+          message: 'Terjadi kesalahan saat mengambil data',
+          error: error.message,
+      });
+  }
+});
+
 // Jalankan server
 app.listen(port, "0.0.0.0", () => {
   console.log(`Server running on http://0.0.0.0:${port}`);
