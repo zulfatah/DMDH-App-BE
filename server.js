@@ -3,8 +3,7 @@ const jwt = require("jsonwebtoken");
 const express = require("express");
 const mysql = require("mysql2/promise"); // Gunakan mysql2 dengan async/await
 const cors = require("cors");
-const moment = require('moment');
-require('moment-hijri');
+const moment = require('moment-hijri');
 const app = express();
 const port = process.env.PORT || 3002;
 
