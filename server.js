@@ -84,7 +84,6 @@ app.post("/login", async (req, res) => {
         username: user.username,
         guru_id: guru_id,
         role: user_role,
-        guru_nama: guru_nama,
       },
       SECRET_KEY,
       { expiresIn: "2h" } 
@@ -98,7 +97,6 @@ app.post("/login", async (req, res) => {
         username: user.username,
         guru_id: guru_id,
         role: user_role,
-        guru_nama: guru_nama,
       },
       jadwal_ngajar: jadwalRows,
     });
