@@ -58,6 +58,7 @@ app.post("/login", async (req, res) => {
     }
 
     const guru_id = guruRows[0].id;
+    const guru_nama = guruRows[0].nama;
 
     // Ambil jadwal ngajar
     const [jadwalRows] = await pool.query(
@@ -84,6 +85,7 @@ app.post("/login", async (req, res) => {
         username: user.username,
         guru_id: guru_id,
         role: user_role,
+        guru_nama: guru_nama,
       },
       SECRET_KEY,
       { expiresIn: "2h" } 
@@ -97,6 +99,7 @@ app.post("/login", async (req, res) => {
         username: user.username,
         guru_id: guru_id,
         role: user_role,
+        guru_nama: guru_nama,
       },
       jadwal_ngajar: jadwalRows,
     });
