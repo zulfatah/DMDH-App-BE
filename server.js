@@ -58,7 +58,6 @@ app.post("/login", async (req, res) => {
     }
 
     const guru_id = guruRows[0].id;
-    const guru_nama = guruRows[0].nama;
 
     // Ambil jadwal ngajar
     const [jadwalRows] = await pool.query(
