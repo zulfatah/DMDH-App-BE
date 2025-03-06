@@ -45,62 +45,34 @@ app.post("/login", async (req, res) => {
 
     const user = userRows[0]; 
     const user_id = user.id;
+    const user_role = user.role; // Ambil role langsung dari tabel users
 
-    // Cek apakah user seorang guru
-    const [guruRows] = await pool.query(
-      "SELECT id FROM guru WHERE user_id = ?",
-      [user_id]
-    );
-
-    if (guruRows.length === 0) {
-      return res.status(403).json({ error: "User ini bukan seorang guru" });
-    }
-
-    const guru_id = guruRows[0].id;
-
-    // Ambil jadwal ngajar
-    const [jadwalRows] = await pool.query(
-      `SELECT 
-          j.id AS jadwal_id,
-          j.kelas_id,
-          j.guru_id,
-          j.waktu_id,
-          g.nama AS guru_nama,
-          k.nama AS kelas_nama,
-          w.nama AS waktu_nama
-       FROM jadwal_ngajar j
-       JOIN guru g ON j.guru_id = g.id
-       JOIN kelas k ON j.kelas_id = k.id
-       JOIN waktu w ON j.waktu_id = w.id
-       WHERE j.guru_id = ?`,
-      [guru_id]
-    );
-
-    // 🛡️ Buat token JWT
+    // Buat token JWT (bisa simpan role di token kalau perlu)
     const accessToken = jwt.sign(
       {
         user_id: user_id,
         username: user.username,
-        guru_id: guru_id,
+        role: user_role, // Simpan role di token biar praktis kalau perlu
       },
       SECRET_KEY,
-      { expiresIn: "2h" } 
+      { expiresIn: "2h" }
     );
 
+    // Response final: tanpa guru_id, hanya user info dasar + token
     res.json({
       message: "Login berhasil",
       accessToken,
       user: {
         id: user_id,
         username: user.username,
-        guru_id: guru_id,
-      },
-      jadwal_ngajar: jadwalRows,
+        role: user_role, // Ini tambahan sesuai request
+      }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 app.get("/jadwal-ngajar", async (req, res) => {
   const authHeader = req.headers["authorization"];
