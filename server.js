@@ -137,6 +137,9 @@ app.get("/jadwal-ngajar", async (req, res) => {
       [guru_id]
     );
 
+    // Asumsinya semua data jadwal pasti punya guru_nama yang sama (karena satu guru_id)
+    const guruNama = jadwalRows.length > 0 ? jadwalRows[0].guru_nama : null;
+
     res.json({
       message: "Login berhasil", // sengaja samain
       accessToken: token, // balikin tokennya lagi (opsional)
@@ -144,14 +147,22 @@ app.get("/jadwal-ngajar", async (req, res) => {
         id: user_id,
         username: username,
         guru_id: guru_id,
+        guru_nama: guruNama, // taruh di sini
       },
-      jadwal_ngajar: jadwalRows,
+      jadwal_ngajar: jadwalRows.map(j => ({
+        jadwal_id: j.jadwal_id,
+        kelas_id: j.kelas_id,
+        kelas_nama: j.kelas_nama,
+        waktu_id: j.waktu_id,
+        waktu_nama: j.waktu_nama,
+      })),
     });
 
   } catch (error) {
     return res.status(403).json({ error: "Token tidak valid atau expired" });
   }
 });
+
 
 
 app.post("/register/bulk", async (req, res) => {
