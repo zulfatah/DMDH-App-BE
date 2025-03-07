@@ -428,6 +428,229 @@ app.post("/guru", async (req, res) => {
   }
 });
 
+app.get("/santri", async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT s.id, s.nama, s.kelas_id, k.nama AS kelas_nama 
+      FROM santri s
+      JOIN kelas k ON s.kelas_id = k.id
+    `);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/santri", async (req, res) => {
+  try {
+    const { nama, kelas_id } = req.body;
+
+    if (!nama || !kelas_id) {
+      return res.status(400).json({ error: "Nama dan kelas_id wajib diisi" });
+    }
+
+    const sql = "INSERT INTO santri (nama, kelas_id) VALUES (?, ?)";
+    const [result] = await pool.query(sql, [nama, kelas_id]);
+
+    res.status(201).json({ message: "Santri berhasil ditambahkan", id: result.insertId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/santri/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nama, kelas_id } = req.body;
+
+    if (!nama || !kelas_id) {
+      return res.status(400).json({ error: "Nama dan kelas_id wajib diisi" });
+    }
+
+    const sql = "UPDATE santri SET nama = ?, kelas_id = ? WHERE id = ?";
+    const [result] = await pool.query(sql, [nama, kelas_id, id]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Santri tidak ditemukan" });
+    }
+
+    res.json({ message: "Santri berhasil diperbarui" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/santri/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const sql = "DELETE FROM santri WHERE id = ?";
+    const [result] = await pool.query(sql, [id]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Santri tidak ditemukan" });
+    }
+
+    res.json({ message: "Santri berhasil dihapus" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/guru", async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT g.id, g.nama, g.user_id, u.username
+      FROM guru g
+      JOIN users u ON g.user_id = u.id
+    `);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/guru", async (req, res) => {
+  try {
+    const { nama, user_id } = req.body;
+
+    if (!nama || !user_id) {
+      return res.status(400).json({ error: "Nama dan user_id wajib diisi" });
+    }
+
+    const sql = "INSERT INTO guru (nama, user_id) VALUES (?, ?)";
+    const [result] = await pool.query(sql, [nama, user_id]);
+
+    res.status(201).json({ message: "Guru berhasil ditambahkan", id: result.insertId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/guru/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nama, user_id } = req.body;
+
+    if (!nama || !user_id) {
+      return res.status(400).json({ error: "Nama dan user_id wajib diisi" });
+    }
+
+    const sql = "UPDATE guru SET nama = ?, user_id = ? WHERE id = ?";
+    const [result] = await pool.query(sql, [nama, user_id, id]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Guru tidak ditemukan" });
+    }
+
+    res.json({ message: "Guru berhasil diperbarui" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/guru/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const sql = "DELETE FROM guru WHERE id = ?";
+    const [result] = await pool.query(sql, [id]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Guru tidak ditemukan" });
+    }
+
+    res.json({ message: "Guru berhasil dihapus" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+// GET - Ambil Semua Data Jadwal
+app.get("/jadwal-ngajar-all", async (req, res) => {
+  try {
+    const sql = `
+      SELECT 
+        j.id AS jadwal_id,
+        j.kelas_id,
+        j.guru_id,
+        j.waktu_id,
+        g.nama AS guru_nama,
+        k.nama AS kelas_nama,
+        w.nama AS waktu_nama
+      FROM jadwal_ngajar j
+      JOIN guru g ON j.guru_id = g.id
+      JOIN kelas k ON j.kelas_id = k.id
+      JOIN waktu w ON j.waktu_id = w.id
+    `;
+    const [rows] = await pool.query(sql);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST - Tambah Data Jadwal
+app.post("/jadwal-ngajar", async (req, res) => {
+  try {
+    const { kelas_id, guru_id, waktu_id } = req.body;
+
+    if (!kelas_id || !guru_id || !waktu_id) {
+      return res.status(400).json({ error: "Semua field harus diisi" });
+    }
+
+    const sql = "INSERT INTO jadwal_ngajar (kelas_id, guru_id, waktu_id) VALUES (?, ?, ?)";
+    const [result] = await pool.query(sql, [kelas_id, guru_id, waktu_id]);
+
+    res.status(201).json({ message: "Jadwal berhasil ditambahkan", jadwal_id: result.insertId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT - Update Data Jadwal
+app.put("/jadwal-ngajar/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { kelas_id, guru_id, waktu_id } = req.body;
+
+    if (!kelas_id || !guru_id || !waktu_id) {
+      return res.status(400).json({ error: "Semua field harus diisi" });
+    }
+
+    const sql = "UPDATE jadwal_ngajar SET kelas_id = ?, guru_id = ?, waktu_id = ? WHERE id = ?";
+    const [result] = await pool.query(sql, [kelas_id, guru_id, waktu_id, id]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Jadwal tidak ditemukan" });
+    }
+
+    res.json({ message: "Jadwal berhasil diperbarui" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE - Hapus Data Jadwal
+app.delete("/jadwal-ngajar/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const sql = "DELETE FROM jadwal_ngajar WHERE id = ?";
+    const [result] = await pool.query(sql, [id]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Jadwal tidak ditemukan" });
+    }
+
+    res.json({ message: "Jadwal berhasil dihapus" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Bulk insert ke tabel Santri
 app.post("/santri", async (req, res) => {
   try {
