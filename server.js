@@ -360,6 +360,31 @@ app.post("/api/absensi-harian", async (req, res) => {
   }
 });
 
+app.post('/absensi/alpa', async (req, res) => {
+  const { tanggal } = req.body;
+  if (!tanggal) {
+      return res.status(400).json({ error: 'Tanggal diperlukan dalam body request' });
+  }
+
+  const query = `
+      SELECT santri.nama AS santri_nama, 
+             kelas.nama AS kelas_nama, 
+             waktu.nama AS waktu_nama 
+      FROM absensi 
+      JOIN santri ON absensi.santri_id = santri.id 
+      JOIN kelas ON absensi.kelas_id = kelas.id 
+      JOIN waktu ON absensi.waktu_id = waktu.id 
+      WHERE absensi.alpa = 1 AND absensi.tanggal = ?`;
+
+  try {
+      const [results] = await pool.query(query, [tanggal]);
+      res.json(results);
+  } catch (err) {
+      console.error('Error executing query:', err);
+      res.status(500).json({ error: 'Database query error' });
+  }
+});
+
 // Endpoint untuk mendapatkan semua user
 app.get("/api/users", async (req, res) => {
   try {
