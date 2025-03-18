@@ -360,6 +360,45 @@ app.post("/api/absensi-harian", async (req, res) => {
   }
 });
 
+// Endpoint untuk mendapatkan laporan guru
+app.post("/laporan-guru", async (req, res) => {
+  try {
+         const { tanggal_awal, tanggal_akhir, kelas_id } = req.body;
+         
+         if (!tanggal_awal || !tanggal_akhir || !kelas_id) {
+             return res.status(400).json({ message: 'Tanggal awal, tanggal akhir, dan kelas_id wajib diisi.' });
+         }
+ 
+     const query = `
+              SELECT 
+         g.nama AS nama_guru, 
+         w.nama AS waktu, 
+         CASE 
+           WHEN COUNT(j.id) > 0 THEN 'guru tetap' 
+           ELSE 'guru pengganti' 
+         END AS status,
+         COUNT(DISTINCT a.tanggal) AS jumlah_ngajar
+       FROM absensi a
+       JOIN guru g ON a.guru_id = g.id
+       JOIN waktu w ON a.waktu_id = w.id
+       LEFT JOIN jadwal_ngajar j 
+         ON a.guru_id = j.guru_id 
+         AND a.kelas_id = j.kelas_id 
+         AND a.waktu_id = j.waktu_id
+       WHERE a.tanggal BETWEEN ? AND ?
+       AND a.kelas_id = ?
+       GROUP BY g.nama, w.nama, a.guru_id
+       ORDER BY g.nama;
+         `;
+ 
+     const [rows] = await pool.query(query, [tanggal_awal, tanggal_akhir, kelas_id]);
+         res.json(rows);
+   } catch (error) {
+     console.error(error);
+     res.status(500).json({ message: "Terjadi kesalahan pada server" });
+   }
+ });
+
 app.post('/absensi/alpa', async (req, res) => {
   const { tanggal } = req.body;
   if (!tanggal) {
