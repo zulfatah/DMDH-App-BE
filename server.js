@@ -399,6 +399,60 @@ app.post("/laporan-guru", async (req, res) => {
    }
  });
 
+ // Endpoint untuk mendapatkan data absensi guru
+app.post("/detail-ngajar", async (req, res) => {
+  const { tgl_awal, tgl_akhir, guru_id } = req.body;
+
+  if (!tgl_awal || !tgl_akhir || !guru_id) {
+    return res.status(400).json({ error: "Parameter tgl_awal, tgl_akhir, dan guru_id wajib diisi" });
+  }
+
+  try {
+    const [rows] = await pool.execute(
+      `SELECT 
+        k.nama AS kelas,
+        w.nama AS waktu, 
+        CASE 
+            WHEN COUNT(j.id) > 0 THEN 'guru tetap' 
+            ELSE 'guru pengganti' 
+        END AS status,
+        COUNT(DISTINCT a.tanggal) AS jumlah_ngajar,
+        CASE 
+            WHEN COUNT(j.id) > 0 THEN COALESCE(MAX(aktif_belajar.total_aktif), 0)
+            ELSE NULL
+        END AS jumlah_aktif_belajar
+      FROM absensi a
+      JOIN kelas k ON a.kelas_id = k.id
+      JOIN waktu w ON a.waktu_id = w.id
+      LEFT JOIN jadwal_ngajar j 
+          ON a.guru_id = j.guru_id 
+          AND a.kelas_id = j.kelas_id 
+          AND a.waktu_id = j.waktu_id
+      LEFT JOIN (
+          SELECT 
+              a2.kelas_id, 
+              a2.waktu_id, 
+              COUNT(DISTINCT a2.tanggal) AS total_aktif
+          FROM absensi a2
+          WHERE a2.tanggal BETWEEN ? AND ?
+          GROUP BY a2.kelas_id, a2.waktu_id
+      ) AS aktif_belajar 
+      ON a.kelas_id = aktif_belajar.kelas_id 
+      AND a.waktu_id = aktif_belajar.waktu_id
+      WHERE a.tanggal BETWEEN ? AND ?
+      AND a.guru_id = ? 
+      GROUP BY k.nama, w.nama, a.kelas_id, a.waktu_id, a.guru_id
+      ORDER BY k.nama, w.nama;`,
+      [tgl_awal, tgl_akhir, tgl_awal, tgl_akhir, guru_id]
+    );
+
+    res.json(rows);
+  } catch (error) {
+    console.error("Database error:", error);
+    res.status(500).json({ error: "Terjadi kesalahan pada server" });
+  }
+});
+
 app.post('/absensi/alpa', async (req, res) => {
   const { tanggal } = req.body;
   if (!tanggal) {
