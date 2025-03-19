@@ -105,34 +105,32 @@ app.post("/login", async (req, res) => {
   }
 });
 
-app.post("/change-password", (req, res) => {
+app.post("/change-password", async (req, res) => {
   const { username, oldPassword, newPassword } = req.body;
 
   if (!username || !oldPassword || !newPassword) {
     return res.status(400).json({ message: "Semua field harus diisi!" });
   }
 
-  // Cek apakah username dan password lama cocok
-  pool.query("SELECT password FROM users WHERE username = ?", [username], (err, results) => {
-    if (err) return res.status(500).json({ message: "Database error" });
+  try {
+    // Cek apakah username dan password lama cocok
+    const [userRows] = await pool.query(
+      "SELECT * FROM users WHERE username = ? AND password = ?",
+      [username, oldPassword]
+    );
 
-    if (results.length === 0) {
-      return res.status(404).json({ message: "User tidak ditemukan" });
-    }
-
-    const storedPassword = results[0].password;
-
-    if (storedPassword !== oldPassword) {
-      return res.status(400).json({ message: "Password lama salah!" });
+    if (userRows.length === 0) {
+      return res.status(400).json({ message: "Username atau password lama salah!" });
     }
 
     // Update password baru
-    pool.query("UPDATE users SET password = ? WHERE username = ?", [newPassword, username], (err) => {
-      if (err) return res.status(500).json({ message: "Gagal memperbarui password" });
+    await pool.query("UPDATE users SET password = ? WHERE username = ?", [newPassword, username]);
 
-      res.json({ message: "Password berhasil diubah!" });
-    });
-  });
+    res.json({ message: "Password berhasil diubah!" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Terjadi kesalahan server" });
+  }
 });
 
 app.get("/jadwal-ngajar", async (req, res) => {
