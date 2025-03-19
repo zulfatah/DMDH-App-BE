@@ -406,43 +406,41 @@ app.post("/detail-ngajar", async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `SELECT 
-    g.nama AS nama,  
-    k.nama AS kelas,
-    w.nama AS waktu, 
-    CASE 
-        WHEN COUNT(j.id) > 0 THEN 'Guru Tetap' 
-        ELSE 'Guru Pengganti' 
-    END AS status,
-    COUNT(DISTINCT a.tanggal) AS jumlah_ngajar,
-    CASE 
-        WHEN COUNT(j.id) > 0 THEN COALESCE(aktif_belajar.total_aktif, 0)
-        ELSE NULL
-    END AS jumlah_aktif_belajar
-FROM absensi a
+g.nama AS nama,
+k.nama AS kelas,
+        w.nama AS waktu, 
+        CASE 
+            WHEN COUNT(j.id) > 0 THEN 'Guru Tetap' 
+            ELSE 'Guru Pengganti' 
+        END AS status,
+        COUNT(DISTINCT a.tanggal) AS jumlah_ngajar,
+        CASE 
+            WHEN COUNT(j.id) > 0 THEN COALESCE(MAX(aktif_belajar.total_aktif), 0)
+            ELSE NULL
+        END AS jumlah_aktif_belajar
+      FROM absensi a
 JOIN guru g ON a.guru_id = g.id
-JOIN kelas k ON a.kelas_id = k.id
-JOIN waktu w ON a.waktu_id = w.id
-LEFT JOIN jadwal_ngajar j 
-    ON a.guru_id = j.guru_id 
-    AND a.kelas_id = j.kelas_id 
-    AND a.waktu_id = j.waktu_id
-LEFT JOIN (
-    SELECT 
-        a2.guru_id,
-        a2.kelas_id, 
-        a2.waktu_id, 
-        COUNT(DISTINCT a2.tanggal) AS total_aktif
-    FROM absensi a2
-    WHERE a2.tanggal BETWEEN ? AND ?
-    GROUP BY a2.guru_id, a2.kelas_id, a2.waktu_id
-) AS aktif_belajar 
-ON a.guru_id = aktif_belajar.guru_id
-AND a.kelas_id = aktif_belajar.kelas_id 
-AND a.waktu_id = aktif_belajar.waktu_id
-WHERE a.tanggal BETWEEN ? AND ?
-AND a.guru_id = ? 
-GROUP BY g.nama, k.nama, w.nama, a.kelas_id, a.waktu_id, a.guru_id, aktif_belajar.total_aktif
-ORDER BY k.nama ASC, w.nama ASC, status DESC;`,
+      JOIN kelas k ON a.kelas_id = k.id
+      JOIN waktu w ON a.waktu_id = w.id
+      LEFT JOIN jadwal_ngajar j 
+          ON a.guru_id = j.guru_id 
+          AND a.kelas_id = j.kelas_id 
+          AND a.waktu_id = j.waktu_id
+      LEFT JOIN (
+          SELECT 
+              a2.kelas_id, 
+              a2.waktu_id, 
+              COUNT(DISTINCT a2.tanggal) AS total_aktif
+          FROM absensi a2
+          WHERE a2.tanggal BETWEEN ? AND ?
+          GROUP BY a2.kelas_id, a2.waktu_id
+      ) AS aktif_belajar 
+      ON a.kelas_id = aktif_belajar.kelas_id 
+      AND a.waktu_id = aktif_belajar.waktu_id
+      WHERE a.tanggal BETWEEN ? AND ?
+      AND a.guru_id = ? 
+      GROUP BY g.nama, k.nama, w.nama, a.kelas_id, a.waktu_id, a.guru_id
+      ORDER BY k.nama, w.nama, status DESC;`,
       [tgl_awal, tgl_akhir, tgl_awal, tgl_akhir, guru_id]
     );
 
