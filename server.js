@@ -440,7 +440,7 @@ ON a.guru_id = aktif_belajar.guru_id
 AND a.kelas_id = aktif_belajar.kelas_id 
 AND a.waktu_id = aktif_belajar.waktu_id
 WHERE a.tanggal BETWEEN ? AND ?
-AND a.guru_id = 7 
+AND a.guru_id = ? 
 GROUP BY g.nama, k.nama, w.nama, a.kelas_id, a.waktu_id, a.guru_id, aktif_belajar.total_aktif
 ORDER BY k.nama ASC, w.nama ASC, status DESC;`,
       [tgl_awal, tgl_akhir, tgl_awal, tgl_akhir, guru_id]
