@@ -357,15 +357,14 @@ app.post("/laporan-guru", async (req, res) => {
     const { tanggal_awal, tanggal_akhir } = req.body;
 
     if (!tanggal_awal || !tanggal_akhir) {
-      return res
-        .status(400)
-        .json({
-          message: "Tanggal awal, tanggal akhir, dan kelas_id wajib diisi.",
-        });
+      return res.status(400).json({
+        message: "Tanggal awal, tanggal akhir, dan kelas_id wajib diisi.",
+      });
     }
 
     const query = `
             SELECT 
+            g.id AS guru_id,
   g.nama AS nama_guru, 
   k.nama AS nama_kelas, 
   w.nama AS waktu, 
@@ -399,11 +398,9 @@ app.post("/detail-ngajar", async (req, res) => {
   const { tgl_awal, tgl_akhir, guru_id } = req.body;
 
   if (!tgl_awal || !tgl_akhir || !guru_id) {
-    return res
-      .status(400)
-      .json({
-        error: "Parameter tgl_awal, tgl_akhir, dan guru_id wajib diisi",
-      });
+    return res.status(400).json({
+      error: "Parameter tgl_awal, tgl_akhir, dan guru_id wajib diisi",
+    });
   }
 
   try {
@@ -723,12 +720,10 @@ app.post("/jadwal-ngajar", async (req, res) => {
       "INSERT INTO jadwal_ngajar (kelas_id, guru_id, waktu_id) VALUES (?, ?, ?)";
     const [result] = await pool.query(sql, [kelas_id, guru_id, waktu_id]);
 
-    res
-      .status(201)
-      .json({
-        message: "Jadwal berhasil ditambahkan",
-        jadwal_id: result.insertId,
-      });
+    res.status(201).json({
+      message: "Jadwal berhasil ditambahkan",
+      jadwal_id: result.insertId,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
