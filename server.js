@@ -105,6 +105,36 @@ app.post("/login", async (req, res) => {
   }
 });
 
+app.post("/change-password", (req, res) => {
+  const { username, oldPassword, newPassword } = req.body;
+
+  if (!username || !oldPassword || !newPassword) {
+    return res.status(400).json({ message: "Semua field harus diisi!" });
+  }
+
+  // Cek apakah username dan password lama cocok
+  pool.query("SELECT password FROM users WHERE username = ?", [username], (err, results) => {
+    if (err) return res.status(500).json({ message: "Database error" });
+
+    if (results.length === 0) {
+      return res.status(404).json({ message: "User tidak ditemukan" });
+    }
+
+    const storedPassword = results[0].password;
+
+    if (storedPassword !== oldPassword) {
+      return res.status(400).json({ message: "Password lama salah!" });
+    }
+
+    // Update password baru
+    pool.query("UPDATE users SET password = ? WHERE username = ?", [newPassword, username], (err) => {
+      if (err) return res.status(500).json({ message: "Gagal memperbarui password" });
+
+      res.json({ message: "Password berhasil diubah!" });
+    });
+  });
+});
+
 app.get("/jadwal-ngajar", async (req, res) => {
   const authHeader = req.headers["authorization"];
   if (!authHeader) {
