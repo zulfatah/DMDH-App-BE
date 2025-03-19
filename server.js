@@ -365,7 +365,7 @@ app.post("/laporan-guru", async (req, res) => {
     }
 
     const query = `
-              SELECT 
+            SELECT 
   g.nama AS nama_guru, 
   k.nama AS nama_kelas, 
   w.nama AS waktu, 
@@ -384,7 +384,7 @@ LEFT JOIN jadwal_ngajar j
   AND a.waktu_id = j.waktu_id
 WHERE a.tanggal BETWEEN ? AND ?
 GROUP BY g.nama, k.nama, w.nama, a.guru_id
-ORDER BY g.nama, k.nama;
+ORDER BY k.nama, w.nama, status DESC;
          `;
     const [rows] = await pool.query(query, [tanggal_awal, tanggal_akhir]);
     res.json(rows);
