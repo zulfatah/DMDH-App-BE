@@ -3,16 +3,16 @@ const jwt = require("jsonwebtoken");
 const express = require("express");
 const mysql = require("mysql2/promise"); // Gunakan mysql2 dengan async/await
 const cors = require("cors");
-const moment = require('moment-hijri');
+const moment = require("moment-hijri");
 const app = express();
 const port = process.env.PORT || 3002;
 
-moment.locale('id');
+moment.locale("id");
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-const SECRET_KEY = process.env.JWT_SECRET || "rahasia-super-aman"; 
+const SECRET_KEY = process.env.JWT_SECRET || "rahasia-super-aman";
 // Koneksi ke MySQL menggunakan mysql2/promise
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
@@ -43,7 +43,7 @@ app.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Username atau password salah" });
     }
 
-    const user = userRows[0]; 
+    const user = userRows[0];
     const user_id = user.id;
     const user_role = user.role;
 
@@ -86,7 +86,7 @@ app.post("/login", async (req, res) => {
         role: user_role,
       },
       SECRET_KEY,
-      { expiresIn: "2h" } 
+      { expiresIn: "2h" }
     );
 
     res.json({
@@ -149,7 +149,7 @@ app.get("/jadwal-ngajar", async (req, res) => {
         guru_id: guru_id,
         guru_nama: guruNama, // taruh di sini
       },
-      jadwal_ngajar: jadwalRows.map(j => ({
+      jadwal_ngajar: jadwalRows.map((j) => ({
         jadwal_id: j.jadwal_id,
         kelas_id: j.kelas_id,
         kelas_nama: j.kelas_nama,
@@ -157,13 +157,10 @@ app.get("/jadwal-ngajar", async (req, res) => {
         waktu_nama: j.waktu_nama,
       })),
     });
-
   } catch (error) {
     return res.status(403).json({ error: "Token tidak valid atau expired" });
   }
 });
-
-
 
 app.post("/register/bulk", async (req, res) => {
   const users = req.body.users; // Expect array of users
@@ -182,11 +179,9 @@ app.post("/register/bulk", async (req, res) => {
       const { username, password, isGuru, namaGuru } = user;
 
       if (!username || !password) {
-        return res
-          .status(400)
-          .json({
-            error: "Username dan password wajib diisi untuk setiap user",
-          });
+        return res.status(400).json({
+          error: "Username dan password wajib diisi untuk setiap user",
+        });
       }
 
       // Simpan user ke array
@@ -220,11 +215,9 @@ app.post("/register/bulk", async (req, res) => {
       ]);
     }
 
-    res
-      .status(201)
-      .json({
-        message: `${userResults.affectedRows} user berhasil didaftarkan`,
-      });
+    res.status(201).json({
+      message: `${userResults.affectedRows} user berhasil didaftarkan`,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -235,11 +228,9 @@ app.post("/reset-password", async (req, res) => {
   const { username, password_lama, password_baru } = req.body;
 
   if (!username || !password_lama || !password_baru) {
-    return res
-      .status(400)
-      .json({
-        error: "Username, password lama, dan password baru wajib diisi",
-      });
+    return res.status(400).json({
+      error: "Username, password lama, dan password baru wajib diisi",
+    });
   }
 
   try {
@@ -363,48 +354,56 @@ app.post("/api/absensi-harian", async (req, res) => {
 // Endpoint untuk mendapatkan laporan guru
 app.post("/laporan-guru", async (req, res) => {
   try {
-         const { tanggal_awal, tanggal_akhir, kelas_id } = req.body;
-         
-         if (!tanggal_awal || !tanggal_akhir || !kelas_id) {
-             return res.status(400).json({ message: 'Tanggal awal, tanggal akhir, dan kelas_id wajib diisi.' });
-         }
- 
-     const query = `
-              SELECT 
-         g.nama AS nama_guru, 
-         w.nama AS waktu, 
-         CASE 
-           WHEN COUNT(j.id) > 0 THEN 'guru tetap' 
-           ELSE 'guru pengganti' 
-         END AS status,
-         COUNT(DISTINCT a.tanggal) AS jumlah_ngajar
-       FROM absensi a
-       JOIN guru g ON a.guru_id = g.id
-       JOIN waktu w ON a.waktu_id = w.id
-       LEFT JOIN jadwal_ngajar j 
-         ON a.guru_id = j.guru_id 
-         AND a.kelas_id = j.kelas_id 
-         AND a.waktu_id = j.waktu_id
-       WHERE a.tanggal BETWEEN ? AND ?
-       AND a.kelas_id = ?
-       GROUP BY g.nama, w.nama, a.guru_id
-       ORDER BY g.nama;
-         `;
- 
-     const [rows] = await pool.query(query, [tanggal_awal, tanggal_akhir, kelas_id]);
-         res.json(rows);
-   } catch (error) {
-     console.error(error);
-     res.status(500).json({ message: "Terjadi kesalahan pada server" });
-   }
- });
+    const { tanggal_awal, tanggal_akhir } = req.body;
 
- // Endpoint untuk mendapatkan data absensi guru
+    if (!tanggal_awal || !tanggal_akhir) {
+      return res
+        .status(400)
+        .json({
+          message: "Tanggal awal, tanggal akhir, dan kelas_id wajib diisi.",
+        });
+    }
+
+    const query = `
+              SELECT 
+  g.nama AS nama_guru, 
+  k.nama AS nama_kelas, 
+  w.nama AS waktu, 
+  CASE 
+    WHEN COUNT(j.id) > 0 THEN 'Guru Tetap' 
+    ELSE 'Guru Pengganti' 
+  END AS status,
+  COUNT(DISTINCT a.tanggal) AS jumlah_ngajar
+FROM absensi a
+JOIN guru g ON a.guru_id = g.id
+JOIN waktu w ON a.waktu_id = w.id
+JOIN kelas k ON a.kelas_id = k.id
+LEFT JOIN jadwal_ngajar j 
+  ON a.guru_id = j.guru_id 
+  AND a.kelas_id = j.kelas_id 
+  AND a.waktu_id = j.waktu_id
+WHERE a.tanggal BETWEEN ? AND ?
+GROUP BY g.nama, k.nama, w.nama, a.guru_id
+ORDER BY g.nama, k.nama;
+         `;
+    const [rows] = await pool.query(query, [tanggal_awal, tanggal_akhir]);
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Terjadi kesalahan pada server" });
+  }
+});
+
+// Endpoint untuk mendapatkan data absensi guru
 app.post("/detail-ngajar", async (req, res) => {
   const { tgl_awal, tgl_akhir, guru_id } = req.body;
 
   if (!tgl_awal || !tgl_akhir || !guru_id) {
-    return res.status(400).json({ error: "Parameter tgl_awal, tgl_akhir, dan guru_id wajib diisi" });
+    return res
+      .status(400)
+      .json({
+        error: "Parameter tgl_awal, tgl_akhir, dan guru_id wajib diisi",
+      });
   }
 
   try {
@@ -453,10 +452,12 @@ app.post("/detail-ngajar", async (req, res) => {
   }
 });
 
-app.post('/absensi/alpa', async (req, res) => {
+app.post("/absensi/alpa", async (req, res) => {
   const { tanggal } = req.body;
   if (!tanggal) {
-      return res.status(400).json({ error: 'Tanggal diperlukan dalam body request' });
+    return res
+      .status(400)
+      .json({ error: "Tanggal diperlukan dalam body request" });
   }
 
   const query = `
@@ -470,11 +471,11 @@ app.post('/absensi/alpa', async (req, res) => {
       WHERE absensi.alpa = 1 AND absensi.tanggal = ?`;
 
   try {
-      const [results] = await pool.query(query, [tanggal]);
-      res.json(results);
+    const [results] = await pool.query(query, [tanggal]);
+    res.json(results);
   } catch (err) {
-      console.error('Error executing query:', err);
-      res.status(500).json({ error: 'Database query error' });
+    console.error("Error executing query:", err);
+    res.status(500).json({ error: "Database query error" });
   }
 });
 
@@ -493,11 +494,9 @@ app.post("/kelas", async (req, res) => {
   try {
     const kelasArray = req.body.kelas;
     if (!Array.isArray(kelasArray) || kelasArray.length === 0) {
-      return res
-        .status(400)
-        .json({
-          error: "Data kelas harus berupa array dan tidak boleh kosong",
-        });
+      return res.status(400).json({
+        error: "Data kelas harus berupa array dan tidak boleh kosong",
+      });
     }
 
     const values = kelasArray.map((nama) => [nama]);
@@ -522,7 +521,6 @@ app.get("/kelas", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 
 // Bulk insert ke tabel Guru
 app.post("/guru", async (req, res) => {
@@ -570,7 +568,9 @@ app.post("/santri", async (req, res) => {
     const sql = "INSERT INTO santri (nama, kelas_id) VALUES (?, ?)";
     const [result] = await pool.query(sql, [nama, kelas_id]);
 
-    res.status(201).json({ message: "Santri berhasil ditambahkan", id: result.insertId });
+    res
+      .status(201)
+      .json({ message: "Santri berhasil ditambahkan", id: result.insertId });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -639,7 +639,9 @@ app.post("/guru", async (req, res) => {
     const sql = "INSERT INTO guru (nama, user_id) VALUES (?, ?)";
     const [result] = await pool.query(sql, [nama, user_id]);
 
-    res.status(201).json({ message: "Guru berhasil ditambahkan", id: result.insertId });
+    res
+      .status(201)
+      .json({ message: "Guru berhasil ditambahkan", id: result.insertId });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -684,8 +686,6 @@ app.delete("/guru/:id", async (req, res) => {
   }
 });
 
-
-
 // GET - Ambil Semua Data Jadwal
 app.get("/jadwal-ngajar-all", async (req, res) => {
   try {
@@ -719,10 +719,16 @@ app.post("/jadwal-ngajar", async (req, res) => {
       return res.status(400).json({ error: "Semua field harus diisi" });
     }
 
-    const sql = "INSERT INTO jadwal_ngajar (kelas_id, guru_id, waktu_id) VALUES (?, ?, ?)";
+    const sql =
+      "INSERT INTO jadwal_ngajar (kelas_id, guru_id, waktu_id) VALUES (?, ?, ?)";
     const [result] = await pool.query(sql, [kelas_id, guru_id, waktu_id]);
 
-    res.status(201).json({ message: "Jadwal berhasil ditambahkan", jadwal_id: result.insertId });
+    res
+      .status(201)
+      .json({
+        message: "Jadwal berhasil ditambahkan",
+        jadwal_id: result.insertId,
+      });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -738,7 +744,8 @@ app.put("/jadwal-ngajar/:id", async (req, res) => {
       return res.status(400).json({ error: "Semua field harus diisi" });
     }
 
-    const sql = "UPDATE jadwal_ngajar SET kelas_id = ?, guru_id = ?, waktu_id = ? WHERE id = ?";
+    const sql =
+      "UPDATE jadwal_ngajar SET kelas_id = ?, guru_id = ?, waktu_id = ? WHERE id = ?";
     const [result] = await pool.query(sql, [kelas_id, guru_id, waktu_id, id]);
 
     if (result.affectedRows === 0) {
@@ -774,11 +781,9 @@ app.post("/santri", async (req, res) => {
   try {
     const santriArray = req.body.santri;
     if (!Array.isArray(santriArray) || santriArray.length === 0) {
-      return res
-        .status(400)
-        .json({
-          error: "Data santri harus berupa array dan tidak boleh kosong",
-        });
+      return res.status(400).json({
+        error: "Data santri harus berupa array dan tidak boleh kosong",
+      });
     }
 
     const values = santriArray.map((nama) => [nama]);
@@ -798,11 +803,9 @@ app.post("/waktu", async (req, res) => {
   try {
     const waktuArray = req.body.waktu;
     if (!Array.isArray(waktuArray) || waktuArray.length === 0) {
-      return res
-        .status(400)
-        .json({
-          error: "Data waktu harus berupa array dan tidak boleh kosong",
-        });
+      return res.status(400).json({
+        error: "Data waktu harus berupa array dan tidak boleh kosong",
+      });
     }
 
     const values = waktuArray.map((nama) => [nama]);
@@ -828,18 +831,15 @@ app.get("/waktu", async (req, res) => {
   }
 });
 
-
 // ✅ INSERT DATA ABSENSI (Mencegah Duplikasi)
 app.post("/absensi", async (req, res) => {
   try {
     const absensiArray = req.body.absensi;
 
     if (!Array.isArray(absensiArray) || absensiArray.length === 0) {
-      return res
-        .status(400)
-        .json({
-          error: "Data absensi harus berupa array dan tidak boleh kosong",
-        });
+      return res.status(400).json({
+        error: "Data absensi harus berupa array dan tidak boleh kosong",
+      });
     }
 
     for (const {
@@ -900,11 +900,9 @@ app.put("/absensi", async (req, res) => {
     const absensiArray = req.body.absensi;
 
     if (!Array.isArray(absensiArray) || absensiArray.length === 0) {
-      return res
-        .status(400)
-        .json({
-          error: "Data absensi harus berupa array dan tidak boleh kosong",
-        });
+      return res.status(400).json({
+        error: "Data absensi harus berupa array dan tidak boleh kosong",
+      });
     }
 
     let updatedCount = 0;
@@ -995,11 +993,11 @@ app.put("/absensi", async (req, res) => {
 //Absensi Bulanan
 app.post("/absensi/bulanan", async (req, res) => {
   const { startDate, endDate, kelas_id, waktu_id } = req.body;
-  
+
   if (!startDate || !endDate || !kelas_id || !waktu_id) {
     return res.status(400).json({ message: "Parameter tidak lengkap" });
   }
-  
+
   const query = `
       SELECT a.*, s.nama AS nama_santri, DATE_FORMAT(a.tanggal, '%Y-%m-%d') AS tanggal_format
       FROM absensi a
@@ -1009,7 +1007,7 @@ app.post("/absensi/bulanan", async (req, res) => {
       AND a.waktu_id = ?
       ORDER BY a.tanggal, s.nama
   `;
-  
+
   try {
     const [rows] = await pool.query(query, [
       startDate,
@@ -1017,38 +1015,38 @@ app.post("/absensi/bulanan", async (req, res) => {
       kelas_id,
       waktu_id,
     ]);
-    
+
     console.log("[DEBUG] Data absensi terambil:", rows.length, "records");
-    
+
     // Generate the full date range
     const tanggalList = generateTanggalRange(startDate, endDate);
     console.log("[DEBUG] Tanggal range:", tanggalList);
-    
+
     const rekap = {};
-    
+
     // Initialize rekap with all students and all dates set to "-"
     rows.forEach((row) => {
       const nama = row.nama_santri;
-      
+
       if (!rekap[nama]) {
         rekap[nama] = {
           nama,
           tanggal: {},
-          jumlah: { H: 0, S: 0, P: 0, I: 0, A: 0 }
+          jumlah: { H: 0, S: 0, P: 0, I: 0, A: 0 },
         };
-        
+
         // Initialize all dates with "-"
         tanggalList.forEach((tgl) => {
           rekap[nama].tanggal[tgl] = "-";
         });
       }
     });
-    
+
     // Now fill in actual attendance data
     rows.forEach((row) => {
       const tanggal = row.tanggal_format;
       const nama = row.nama_santri;
-      
+
       // Determine attendance status code
       let kode = "-";
       if (row.hadir) kode = "H";
@@ -1056,16 +1054,16 @@ app.post("/absensi/bulanan", async (req, res) => {
       else if (row.sakit) kode = "S";
       else if (row.pulang) kode = "P";
       else if (row.alpa) kode = "A";
-      
+
       // Set attendance for this date
       rekap[nama].tanggal[tanggal] = kode;
-      
+
       // Update count for this status
       if (kode !== "-") {
         rekap[nama].jumlah[kode]++;
       }
     });
-    
+
     // Convert to final result array with all dates in the range
     const finalResult = Object.values(rekap).map((santri) => {
       const result = {
@@ -1078,12 +1076,12 @@ app.post("/absensi/bulanan", async (req, res) => {
         jumlah_s: santri.jumlah.S,
         jumlah_p: santri.jumlah.P,
         jumlah_i: santri.jumlah.I,
-        jumlah_a: santri.jumlah.A
+        jumlah_a: santri.jumlah.A,
       };
-      
+
       return result;
     });
-    
+
     res.json(finalResult);
   } catch (err) {
     console.error("[ERROR] Gagal query absensi:", err);
@@ -1098,7 +1096,7 @@ app.post("/absensi/bulanan/rekap", async (req, res) => {
   const { startDate, endDate, kelas_id } = req.body;
 
   if (!startDate || !endDate || !kelas_id) {
-      return res.status(400).json({ message: "Parameter tidak lengkap" });
+    return res.status(400).json({ message: "Parameter tidak lengkap" });
   }
 
   const query = `
@@ -1112,81 +1110,82 @@ app.post("/absensi/bulanan/rekap", async (req, res) => {
   `;
 
   try {
-      const [rows] = await pool.query(query, [startDate, endDate, kelas_id]);
+    const [rows] = await pool.query(query, [startDate, endDate, kelas_id]);
 
-      if (rows.length === 0) {
-          return res.json({ message: "Tidak ada data absensi untuk periode dan kelas ini", data: [] });
+    if (rows.length === 0) {
+      return res.json({
+        message: "Tidak ada data absensi untuk periode dan kelas ini",
+        data: [],
+      });
+    }
+
+    const rekap = {};
+
+    rows.forEach((row) => {
+      const nama = row.nama_santri;
+      const namaWaktu = row.nama_waktu.trim().toLowerCase();
+
+      if (!rekap[nama]) {
+        rekap[nama] = {
+          nama,
+          total: [0, 0, 0, 0, 0],
+        };
       }
 
-      const rekap = {};
+      if (!rekap[nama][namaWaktu]) {
+        rekap[nama][namaWaktu] = [0, 0, 0, 0, 0];
+      }
 
-      rows.forEach((row) => {
-          const nama = row.nama_santri;
-          const namaWaktu = row.nama_waktu.trim().toLowerCase();
+      if (row.sakit) {
+        rekap[nama][namaWaktu][0]++;
+        rekap[nama].total[0]++;
+      } else if (row.pulang) {
+        rekap[nama][namaWaktu][1]++;
+        rekap[nama].total[1]++;
+      } else if (row.alpa) {
+        rekap[nama][namaWaktu][2]++;
+        rekap[nama].total[2]++;
+      } else if (row.izin) {
+        rekap[nama][namaWaktu][3]++;
+        rekap[nama].total[3]++;
+      } else if (row.hadir) {
+        rekap[nama][namaWaktu][4]++;
+        rekap[nama].total[4]++;
+      }
+    });
 
-          if (!rekap[nama]) {
-              rekap[nama] = {
-                  nama,
-                  total: [0, 0, 0, 0, 0]
-              };
-          }
+    const result = Object.values(rekap).map((santri, index) => ({
+      no: index + 1,
+      nama: santri.nama,
+      malam: santri.malam || [0, 0, 0, 0, 0],
+      subuh: santri.subuh || [0, 0, 0, 0, 0],
+      dhuha: santri.dhuha || [0, 0, 0, 0, 0],
+      zuhur: santri.zuhur || [0, 0, 0, 0, 0],
+      ashar: santri.ashar || [0, 0, 0, 0, 0],
+      maghrib: santri.maghrib || [0, 0, 0, 0, 0],
+      isya: santri.isya || [0, 0, 0, 0, 0],
+      total: santri.total,
+    }));
 
-          if (!rekap[nama][namaWaktu]) {
-              rekap[nama][namaWaktu] = [0, 0, 0, 0, 0];
-          }
-
-          if (row.sakit) {
-              rekap[nama][namaWaktu][0]++;
-              rekap[nama].total[0]++;
-          } else if (row.pulang) {
-              rekap[nama][namaWaktu][1]++;
-              rekap[nama].total[1]++;
-          } else if (row.alpa) {
-              rekap[nama][namaWaktu][2]++;
-              rekap[nama].total[2]++;
-          } else if (row.izin) {
-              rekap[nama][namaWaktu][3]++;
-              rekap[nama].total[3]++;
-          } else if (row.hadir) {
-              rekap[nama][namaWaktu][4]++;
-              rekap[nama].total[4]++;
-          }
-      });
-
-      const result = Object.values(rekap).map((santri, index) => ({
-          no: index + 1,
-          nama: santri.nama,
-          malam: santri.malam || [0, 0, 0, 0, 0],
-          subuh: santri.subuh || [0, 0, 0, 0, 0],
-          dhuha: santri.dhuha || [0, 0, 0, 0, 0],
-          zuhur: santri.zuhur || [0, 0, 0, 0, 0],
-          ashar: santri.ashar || [0, 0, 0, 0, 0],
-          maghrib: santri.maghrib || [0, 0, 0, 0, 0],
-          isya: santri.isya || [0, 0, 0, 0, 0],
-          total: santri.total
-      }));
-
-      res.json({ message: "Berhasil mengambil data absensi", data: result });
+    res.json({ message: "Berhasil mengambil data absensi", data: result });
   } catch (err) {
-      console.error("[ERROR] Gagal query absensi:", err, {
-          query,
-          params: [startDate, endDate, kelas_id]
-      });
+    console.error("[ERROR] Gagal query absensi:", err, {
+      query,
+      params: [startDate, endDate, kelas_id],
+    });
 
-      res.status(500).json({
-          message: "Gagal mengambil data absensi",
-          error: err.message,
-      });
+    res.status(500).json({
+      message: "Gagal mengambil data absensi",
+      error: err.message,
+    });
   }
 });
-
-
 
 function generateTanggalRange(start, end) {
   const result = [];
   let current = new Date(start);
   const last = new Date(end);
-  
+
   while (current <= last) {
     result.push(current.toISOString().slice(0, 10));
     current.setDate(current.getDate() + 1);
@@ -1194,7 +1193,7 @@ function generateTanggalRange(start, end) {
   return result;
 }
 
-// app.post("/absensi/bulanan/rekapcawu", async (req, res) => { 
+// app.post("/absensi/bulanan/rekapcawu", async (req, res) => {
 //   const { startDate, endDate, kelas_id } = req.body;
 
 //   if (!startDate || !endDate || !kelas_id) {
@@ -1322,17 +1321,17 @@ function generateTanggalRange(start, end) {
 //   }
 // });
 
-app.post('/bulanan/rekapcawu', async (req, res) => {
+app.post("/bulanan/rekapcawu", async (req, res) => {
   try {
-      const { startDate, endDate, kelas_id } = req.body;
+    const { startDate, endDate, kelas_id } = req.body;
 
-      // Validate input
-      if (!startDate || !endDate || !kelas_id) {
-          return res.status(400).json({ message: 'Parameter tidak lengkap' });
-      }
+    // Validate input
+    if (!startDate || !endDate || !kelas_id) {
+      return res.status(400).json({ message: "Parameter tidak lengkap" });
+    }
 
-      // Improved query with parameterized input and more efficient grouping
-      const query = `
+    // Improved query with parameterized input and more efficient grouping
+    const query = `
           SELECT 
               santri.nama,
               MONTH(tanggal) as bulan,
@@ -1349,91 +1348,99 @@ app.post('/bulanan/rekapcawu', async (req, res) => {
           ORDER BY santri.nama, bulan
       `;
 
-      const [rows] = await db.query(query, [startDate, endDate, kelas_id]);
+    const [rows] = await db.query(query, [startDate, endDate, kelas_id]);
 
-      // Improved data processing function
-      const hasil = prosesDataRekap(rows);
+    // Improved data processing function
+    const hasil = prosesDataRekap(rows);
 
-      res.json({ data: hasil });
+    res.json({ data: hasil });
   } catch (error) {
-      console.error('Error dalam endpoint rekapcawu:', error);
-      res.status(500).json({ 
-          message: 'Gagal mengambil data',
-          error: process.env.NODE_ENV === 'development' ? error.message : undefined 
-      });
+    console.error("Error dalam endpoint rekapcawu:", error);
+    res.status(500).json({
+      message: "Gagal mengambil data",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
 });
 
 function prosesDataRekap(rows) {
   const hijriMonthMap = {
-      1: 'muharam', 2: 'safar', 3: 'rabiulawal', 4: 'rabiulakhir',
-      5: 'jumadilawal', 6: 'jumadilakhir', 7: 'rajab', 8: 'syaaban',
-      9: 'ramadhan', 10: 'syawal', 11: 'dzulqadah', 12: 'dzulhijjah'
+    1: "muharam",
+    2: "safar",
+    3: "rabiulawal",
+    4: "rabiulakhir",
+    5: "jumadilawal",
+    6: "jumadilakhir",
+    7: "rajab",
+    8: "syaaban",
+    9: "ramadhan",
+    10: "syawal",
+    11: "dzulqadah",
+    12: "dzulhijjah",
   };
 
   // Use Map for more efficient data storage
   const mapSantri = new Map();
 
-  rows.forEach(row => {
-      // Ensure the santri entry exists
-      if (!mapSantri.has(row.nama)) {
-          mapSantri.set(row.nama, {
-              nama: row.nama,
-              muharam: [0, 0, 0, 0, 0],
-              safar: [0, 0, 0, 0, 0],
-              rabiulawal: [0, 0, 0, 0, 0],
-              rabiulakhir: [0, 0, 0, 0, 0],
-              jumadilawal: [0, 0, 0, 0, 0],
-              jumadilakhir: [0, 0, 0, 0, 0],
-              rajab: [0, 0, 0, 0, 0],
-              syaaban: [0, 0, 0, 0, 0],
-              ramadhan: [0, 0, 0, 0, 0],
-              syawal: [0, 0, 0, 0, 0],
-              dzulqadah: [0, 0, 0, 0, 0],
-              dzulhijjah: [0, 0, 0, 0, 0],
-              total: [0, 0]
-          });
-      }
+  rows.forEach((row) => {
+    // Ensure the santri entry exists
+    if (!mapSantri.has(row.nama)) {
+      mapSantri.set(row.nama, {
+        nama: row.nama,
+        muharam: [0, 0, 0, 0, 0],
+        safar: [0, 0, 0, 0, 0],
+        rabiulawal: [0, 0, 0, 0, 0],
+        rabiulakhir: [0, 0, 0, 0, 0],
+        jumadilawal: [0, 0, 0, 0, 0],
+        jumadilakhir: [0, 0, 0, 0, 0],
+        rajab: [0, 0, 0, 0, 0],
+        syaaban: [0, 0, 0, 0, 0],
+        ramadhan: [0, 0, 0, 0, 0],
+        syawal: [0, 0, 0, 0, 0],
+        dzulqadah: [0, 0, 0, 0, 0],
+        dzulhijjah: [0, 0, 0, 0, 0],
+        total: [0, 0],
+      });
+    }
 
-      const santriData = mapSantri.get(row.nama);
-      const bulanKey = hijriMonthMap[row.bulan];
+    const santriData = mapSantri.get(row.nama);
+    const bulanKey = hijriMonthMap[row.bulan];
 
-      if (bulanKey) {
-          // Order: Sakit, Pulang, Alpa, Izin, Hadir
-          santriData[bulanKey] = [
-              row.sakit, 
-              row.pulang, 
-              row.alpa, 
-              row.izin, 
-              row.hadir
-          ];
+    if (bulanKey) {
+      // Order: Sakit, Pulang, Alpa, Izin, Hadir
+      santriData[bulanKey] = [
+        row.sakit,
+        row.pulang,
+        row.alpa,
+        row.izin,
+        row.hadir,
+      ];
 
-          // Update total counts
-          santriData.total[0] += row.hadir;
-          santriData.total[1] += (row.izin + row.alpa + row.sakit);
-      }
+      // Update total counts
+      santriData.total[0] += row.hadir;
+      santriData.total[1] += row.izin + row.alpa + row.sakit;
+    }
   });
 
   // Convert Map to array with index
   return Array.from(mapSantri.values()).map((data, index) => ({
-      no: index + 1,
-      ...data
+    no: index + 1,
+    ...data,
   }));
 }
 
+app.post("/absensi/bulanan/semuawaktu", async (req, res) => {
+  const { startDate, endDate, kelas_id } = req.body;
 
-app.post("/absensi/bulanan/semuawaktu", async (req, res) => { 
-  const { startDate, endDate, kelas_id } = req.body; 
- 
-  if (!startDate || !endDate || !kelas_id) { 
-    return res 
-      .status(400) 
-      .json({ message: "startDate, endDate, kelas_id wajib diisi" }); 
-  } 
- 
-  try { 
-    // Query ambil rekap absensi + nama waktu langsung 
-    const [rows] = await pool.query( 
+  if (!startDate || !endDate || !kelas_id) {
+    return res
+      .status(400)
+      .json({ message: "startDate, endDate, kelas_id wajib diisi" });
+  }
+
+  try {
+    // Query ambil rekap absensi + nama waktu langsung
+    const [rows] = await pool.query(
       ` 
           SELECT  
               a.waktu_id,  
@@ -1453,10 +1460,10 @@ app.post("/absensi/bulanan/semuawaktu", async (req, res) => {
               AND a.kelas_id = ? 
           GROUP BY  
               a.waktu_id, w.nama, a.santri_id, s.nama 
-      `, 
-      [startDate, endDate, kelas_id] 
-    ); 
- 
+      `,
+      [startDate, endDate, kelas_id]
+    );
+
     // Hitung jumlah aktif belajar (jumlah hari antara startDate & endDate sesuai tgl yang ada di database)
     const [activeStudyDays] = await pool.query(
       `
@@ -1476,75 +1483,78 @@ app.post("/absensi/bulanan/semuawaktu", async (req, res) => {
 
     // Create a mapping of waktu_id to jumlah_hari
     const activeStudyDaysMap = {};
-    activeStudyDays.forEach(day => {
+    activeStudyDays.forEach((day) => {
       activeStudyDaysMap[day.waktu_id] = day.jumlah_hari;
     });
- 
-    // Proses hasil query jadi format yang diminta 
-    const result = {}; 
- 
-    rows.forEach((row) => { 
-      if (!result[row.nama_waktu]) { 
-        result[row.nama_waktu] = { 
-          jumlah_aktif_belajar: activeStudyDaysMap[row.waktu_id] || 0, 
-          rekap_bulanan: [], 
-        }; 
-      } 
- 
-      result[row.nama_waktu].rekap_bulanan.push({ 
-        nama: row.nama_santri, 
-        jumlah_h: row.total_hadir, 
-        jumlah_s: row.total_sakit, 
-        jumlah_p: row.total_pulang, 
-        jumlah_i: row.total_izin, 
-        jumlah_a: row.total_alpa, 
-      }); 
-    }); 
- 
-    res.json(result); 
-  } catch (error) { 
-    console.error("Error saat mengambil data absensi bulanan:", error); 
-    res 
-      .status(500) 
-      .json({ message: "Terjadi kesalahan server", error: error.message }); 
-  } 
+
+    // Proses hasil query jadi format yang diminta
+    const result = {};
+
+    rows.forEach((row) => {
+      if (!result[row.nama_waktu]) {
+        result[row.nama_waktu] = {
+          jumlah_aktif_belajar: activeStudyDaysMap[row.waktu_id] || 0,
+          rekap_bulanan: [],
+        };
+      }
+
+      result[row.nama_waktu].rekap_bulanan.push({
+        nama: row.nama_santri,
+        jumlah_h: row.total_hadir,
+        jumlah_s: row.total_sakit,
+        jumlah_p: row.total_pulang,
+        jumlah_i: row.total_izin,
+        jumlah_a: row.total_alpa,
+      });
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error("Error saat mengambil data absensi bulanan:", error);
+    res
+      .status(500)
+      .json({ message: "Terjadi kesalahan server", error: error.message });
+  }
 });
 
-app.post('/rekapcawu', async (req, res) => {
+app.post("/rekapcawu", async (req, res) => {
   const { startDate, endDate, kelas_id } = req.body;
 
   try {
-      const hijriMonths = [];
-      let current = moment(startDate, 'YYYY-MM-DD');
+    const hijriMonths = [];
+    let current = moment(startDate, "YYYY-MM-DD");
 
-      while (current.isBefore(endDate) || current.isSame(endDate)) {
-          const monthName = current.format('iMMMM');
-          const monthNumber = current.iMonth() + 1;
-          const year = current.iYear();
+    while (current.isBefore(endDate) || current.isSame(endDate)) {
+      const monthName = current.format("iMMMM");
+      const monthNumber = current.iMonth() + 1;
+      const year = current.iYear();
 
-          // Konversi bulan Hijriah ke range Masehi
-          const hijriStart = moment(`${year}-${monthNumber}-1`, 'iYYYY-iM-iD');
-          const hijriEnd = hijriStart.clone().endOf('iMonth');
+      // Konversi bulan Hijriah ke range Masehi
+      const hijriStart = moment(`${year}-${monthNumber}-1`, "iYYYY-iM-iD");
+      const hijriEnd = hijriStart.clone().endOf("iMonth");
 
-          hijriMonths.push({
-              monthName,
-              hijriStart,
-              hijriEnd,
-              startDate: hijriStart.format('YYYY-MM-DD'),
-              endDate: hijriEnd.format('YYYY-MM-DD'),
-          });
+      hijriMonths.push({
+        monthName,
+        hijriStart,
+        hijriEnd,
+        startDate: hijriStart.format("YYYY-MM-DD"),
+        endDate: hijriEnd.format("YYYY-MM-DD"),
+      });
 
-          current = hijriEnd.clone().add(1, 'day'); // loncat ke awal bulan Hijriah berikutnya
-      }
+      current = hijriEnd.clone().add(1, "day"); // loncat ke awal bulan Hijriah berikutnya
+    }
 
-      console.log('Hijri Months Mapping:', hijriMonths); // Debugging
+    console.log("Hijri Months Mapping:", hijriMonths); // Debugging
 
-      const results = [];
+    const results = [];
 
-      for (const month of hijriMonths) {
-          console.log(`Querying for month: ${month.monthName}, Range: ${month.startDate} - ${month.endDate}`);
+    for (const month of hijriMonths) {
+      console.log(
+        `Querying for month: ${month.monthName}, Range: ${month.startDate} - ${month.endDate}`
+      );
 
-          const [rows] = await pool.query(`
+      const [rows] = await pool.query(
+        `
               SELECT 
                   a.santri_id,
                   s.nama AS nama_santri,
@@ -1558,105 +1568,120 @@ app.post('/rekapcawu', async (req, res) => {
               WHERE a.tanggal BETWEEN ? AND ?
               AND a.kelas_id = ?
               GROUP BY a.santri_id, s.nama
-          `, [month.startDate, month.endDate, kelas_id]);
+          `,
+        [month.startDate, month.endDate, kelas_id]
+      );
 
-          rows.forEach(row => {
-              const existing = results.find(r => r.santri_id === row.santri_id);
+      rows.forEach((row) => {
+        const existing = results.find((r) => r.santri_id === row.santri_id);
 
-              if (!existing) {
-                  results.push({
-                      santri_id: row.santri_id,
-                      nama: row.nama_santri,
-                      [month.monthName.toLowerCase()]: [row.hadir, row.sakit, row.pulang, row.alpa, row.izin],
-                      total: [0, 0], // nanti hitung total
-                  });
-              } else {
-                  existing[month.monthName.toLowerCase()] = [row.hadir, row.sakit, row.pulang, row.alpa, row.izin];
-              }
+        if (!existing) {
+          results.push({
+            santri_id: row.santri_id,
+            nama: row.nama_santri,
+            [month.monthName.toLowerCase()]: [
+              row.hadir,
+              row.sakit,
+              row.pulang,
+              row.alpa,
+              row.izin,
+            ],
+            total: [0, 0], // nanti hitung total
           });
-      }
+        } else {
+          existing[month.monthName.toLowerCase()] = [
+            row.hadir,
+            row.sakit,
+            row.pulang,
+            row.alpa,
+            row.izin,
+          ];
+        }
+      });
+    }
 
-      // Hitung total hadir dan tidak hadir
-      results.forEach(row => {
-          let totalHadir = 0;
-          let totalTakHadir = 0;
+    // Hitung total hadir dan tidak hadir
+    results.forEach((row) => {
+      let totalHadir = 0;
+      let totalTakHadir = 0;
 
-          hijriMonths.forEach(({ monthName }) => {
-              const key = monthName.toLowerCase();
-              if (row[key]) {
-                  totalHadir += row[key][0]; // hadir
-                  totalTakHadir += row[key][1] + row[key][2] + row[key][3] + row[key][4]; // sakit, pulang, alpa, izin
-              } else {
-                  row[key] = [0, 0, 0, 0, 0]; // default 0 jika tidak ada data
-              }
-          });
-
-          row.total = [totalHadir, totalTakHadir];
+      hijriMonths.forEach(({ monthName }) => {
+        const key = monthName.toLowerCase();
+        if (row[key]) {
+          totalHadir += row[key][0]; // hadir
+          totalTakHadir +=
+            row[key][1] + row[key][2] + row[key][3] + row[key][4]; // sakit, pulang, alpa, izin
+        } else {
+          row[key] = [0, 0, 0, 0, 0]; // default 0 jika tidak ada data
+        }
       });
 
-      res.json({
-          success: true,
-          data: results,
-      });
+      row.total = [totalHadir, totalTakHadir];
+    });
 
+    res.json({
+      success: true,
+      data: results,
+    });
   } catch (error) {
-      console.error('Error:', error);
-      res.status(500).json({
-          success: false,
-          message: 'Terjadi kesalahan saat mengambil data',
-          error: error.message,
-      });
+    console.error("Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Terjadi kesalahan saat mengambil data",
+      error: error.message,
+    });
   }
 });
 
 const hijriMonths = {
-  1: 'Muharram',
-  2: 'Safar',
-  3: 'Rabiul Awal',
-  4: 'Rabiul Akhir',
-  5: 'Jumadil Awal',
-  6: 'Jumadil Akhir',
-  7: 'Rajab',
-  8: 'Sya\'ban',
-  9: 'Ramadhan',
-  10: 'Syawal',
-  11: 'Dzulqa\'dah',
-  12: 'Dzulhijjah',
+  1: "Muharram",
+  2: "Safar",
+  3: "Rabiul Awal",
+  4: "Rabiul Akhir",
+  5: "Jumadil Awal",
+  6: "Jumadil Akhir",
+  7: "Rajab",
+  8: "Sya'ban",
+  9: "Ramadhan",
+  10: "Syawal",
+  11: "Dzulqa'dah",
+  12: "Dzulhijjah",
 };
 
-app.post('/rekapcawuv2', async (req, res) => {
+app.post("/rekapcawuv2", async (req, res) => {
   const { startDate, endDate, kelas_id } = req.body;
 
   try {
-      const startHijri = moment(startDate, 'YYYY-MM-DD').startOf('day');
-      const endHijri = moment(endDate, 'YYYY-MM-DD').endOf('day');
+    const startHijri = moment(startDate, "YYYY-MM-DD").startOf("day");
+    const endHijri = moment(endDate, "YYYY-MM-DD").endOf("day");
 
-      const months = [];
-      let current = startHijri.clone();
+    const months = [];
+    let current = startHijri.clone();
 
-      while (current.isBefore(endHijri) || current.isSame(endHijri)) {
-          const monthNumber = current.iMonth() + 1;
-          const monthName = hijriMonths[monthNumber];
-          const year = current.iYear();
+    while (current.isBefore(endHijri) || current.isSame(endHijri)) {
+      const monthNumber = current.iMonth() + 1;
+      const monthName = hijriMonths[monthNumber];
+      const year = current.iYear();
 
-          const monthStart = moment(current).startOf('iMonth').format('YYYY-MM-DD');
-          const monthEnd = moment(current).endOf('iMonth').format('YYYY-MM-DD');
+      const monthStart = moment(current).startOf("iMonth").format("YYYY-MM-DD");
+      const monthEnd = moment(current).endOf("iMonth").format("YYYY-MM-DD");
 
-          months.push({
-              monthNumber,
-              monthName,
-              year,
-              startDate: monthStart,
-              endDate: monthEnd,
-          });
+      months.push({
+        monthNumber,
+        monthName,
+        year,
+        startDate: monthStart,
+        endDate: monthEnd,
+      });
 
-          current.add(1, 'iMonth');
-      }
+      current.add(1, "iMonth");
+    }
 
-      const results = [];
+    const results = [];
 
-      for (const month of months) {
-          const [rows] = await pool.query(`
+    for (const month of months) {
+      const [rows] = await pool.query(
+        `
               SELECT 
                   a.santri_id,
                   s.nama AS nama_santri,
@@ -1670,63 +1695,70 @@ app.post('/rekapcawuv2', async (req, res) => {
               WHERE a.tanggal BETWEEN ? AND ?
               AND a.kelas_id = ?
               GROUP BY a.santri_id, s.nama
-          `, [month.startDate, month.endDate, kelas_id]);
+          `,
+        [month.startDate, month.endDate, kelas_id]
+      );
 
-          rows.forEach(row => {
-              let existing = results.find(r => r.santri_id === row.santri_id);
+      rows.forEach((row) => {
+        let existing = results.find((r) => r.santri_id === row.santri_id);
 
-              if (!existing) {
-                  existing = {
-                      santri_id: row.santri_id,
-                      nama: row.nama_santri,
-                      total: [0, 0], // [totalHadir, totalTakHadir]
-                  };
-                  results.push(existing);
-              }
+        if (!existing) {
+          existing = {
+            santri_id: row.santri_id,
+            nama: row.nama_santri,
+            total: [0, 0], // [totalHadir, totalTakHadir]
+          };
+          results.push(existing);
+        }
 
-              const hadir = Number(row.hadir) || 0;
-              const sakit = Number(row.sakit) || 0;
-              const pulang = Number(row.pulang) || 0;
-              const alpa = Number(row.alpa) || 0;
-              const izin = Number(row.izin) || 0;
+        const hadir = Number(row.hadir) || 0;
+        const sakit = Number(row.sakit) || 0;
+        const pulang = Number(row.pulang) || 0;
+        const alpa = Number(row.alpa) || 0;
+        const izin = Number(row.izin) || 0;
 
-              existing[month.monthName] = [hadir, sakit, pulang, alpa, izin];
+        existing[month.monthName] = [hadir, sakit, pulang, alpa, izin];
 
-              // Total per santri (total hadir & total tidak hadir)
-              existing.total[0] += hadir;
-              existing.total[1] += (sakit + pulang + alpa + izin);
-          });
+        // Total per santri (total hadir & total tidak hadir)
+        existing.total[0] += hadir;
+        existing.total[1] += sakit + pulang + alpa + izin;
+      });
 
-          // Kalau bulan ini kosong, tetap tambahkan entry kosong biar konsisten
-          results.forEach(r => {
-              if (!r[month.monthName]) {
-                  r[month.monthName] = [0, 0, 0, 0, 0];
-              }
-          });
-      }
+      // Kalau bulan ini kosong, tetap tambahkan entry kosong biar konsisten
+      results.forEach((r) => {
+        if (!r[month.monthName]) {
+          r[month.monthName] = [0, 0, 0, 0, 0];
+        }
+      });
+    }
 
-       // Setelah semua bulan diproses, ubah total jadi persen
-       results.forEach(r => {
-        const totalHari = r.total[0] + r.total[1];
+    // Setelah semua bulan diproses, ubah total jadi persen
+    results.forEach((r) => {
+      const totalHari = r.total[0] + r.total[1];
 
-        const persenHadir = totalHari > 0 ? ((r.total[0] / totalHari) * 100).toFixed(0) + ' %' : '0 %';
-        const persenTidakHadir = totalHari > 0 ? ((r.total[1] / totalHari) * 100).toFixed(0) + ' %' : '0 %';
+      const persenHadir =
+        totalHari > 0
+          ? ((r.total[0] / totalHari) * 100).toFixed(0) + " %"
+          : "0 %";
+      const persenTidakHadir =
+        totalHari > 0
+          ? ((r.total[1] / totalHari) * 100).toFixed(0) + " %"
+          : "0 %";
 
-        r.total = [persenHadir, persenTidakHadir];
+      r.total = [persenHadir, persenTidakHadir];
     });
 
-      res.json({
-          success: true,
-          data: results,
-      });
-
+    res.json({
+      success: true,
+      data: results,
+    });
   } catch (error) {
-      console.error(error);
-      res.status(500).json({
-          success: false,
-          message: 'Terjadi kesalahan saat mengambil data',
-          error: error.message,
-      });
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Terjadi kesalahan saat mengambil data",
+      error: error.message,
+    });
   }
 });
 
