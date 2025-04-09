@@ -147,26 +147,27 @@ app.get("/jadwal-ngajar", async (req, res) => {
 
     const { user_id, username, guru_id } = decoded; // ambil data dari payload token
 
-    // Ambil jadwal ngajar
-    const [jadwalRows] = await pool.query(
-      `SELECT 
-          j.id AS jadwal_id,
-          j.kelas_id,
-          j.guru_id,
-          j.waktu_id,
-          g.nama AS guru_nama,
-          k.nama AS kelas_nama,
-          w.nama AS waktu_nama
-       FROM jadwal_ngajar j
-       JOIN guru g ON j.guru_id = g.id
-       JOIN kelas k ON j.kelas_id = k.id
-       JOIN waktu w ON j.waktu_id = w.id
-       WHERE j.guru_id = ?`,
-      [guru_id]
-    );
-
-    // Asumsinya semua data jadwal pasti punya guru_nama yang sama (karena satu guru_id)
-    const guruNama = jadwalRows.length > 0 ? jadwalRows[0].guru_nama : null;
+      // 1. Ambil nama guru dari tabel guru
+      const [guruRows] = await pool.query(
+        `SELECT nama FROM guru WHERE id = ?`,
+        [guru_id]
+      );
+      const guruNama = guruRows.length > 0 ? guruRows[0].nama : null;
+  
+      // 2. Ambil jadwal ngajar (tanpa join ke guru)
+      const [jadwalRows] = await pool.query(
+        `SELECT 
+            j.id AS jadwal_id,
+            j.kelas_id,
+            j.waktu_id,
+            k.nama AS kelas_nama,
+            w.nama AS waktu_nama
+         FROM jadwal_ngajar j
+         JOIN kelas k ON j.kelas_id = k.id
+         JOIN waktu w ON j.waktu_id = w.id
+         WHERE j.guru_id = ?`,
+        [guru_id]
+      );
 
     res.json({
       message: "Login berhasil", // sengaja samain
