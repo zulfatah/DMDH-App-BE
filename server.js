@@ -761,13 +761,11 @@ app.post("/jadwal-ngajar", async (req, res) => {
   }
 });
 
-// PUT - Update Data Jadwal
-app.put("/jadwal-ngajar/:id", async (req, res) => {
+app.post("/jadwal-ngajar/update", async (req, res) => {
   try {
-    const { id } = req.params;
-    const { kelas_id, guru_id, waktu_id } = req.body;
+    const { kelas_id, guru_id, waktu_id, id } = req.body;
 
-    if (!kelas_id || !guru_id || !waktu_id) {
+    if (!kelas_id || !guru_id || !waktu_id || !id) {
       return res.status(400).json({ error: "Semua field harus diisi" });
     }
 
@@ -776,14 +774,18 @@ app.put("/jadwal-ngajar/:id", async (req, res) => {
     const [result] = await pool.query(sql, [kelas_id, guru_id, waktu_id, id]);
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "Jadwal tidak ditemukan" });
+      return res.status(404).json({ error: "Jadwal tidak ditemukan atau tidak ada perubahan" });
     }
 
-    res.json({ message: "Jadwal berhasil diperbarui" });
+    res.status(200).json({
+      message: "Jadwal berhasil diperbarui",
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Terjadi kesalahan pada server: " + err.message });
   }
 });
+
+
 
 // DELETE - Hapus Data Jadwal
 app.delete("/jadwal-ngajar/:id", async (req, res) => {
@@ -1788,6 +1790,221 @@ app.post("/rekapcawuv2", async (req, res) => {
     });
   }
 });
+
+app.post("/rekap-nilai-kelas", async (req, res) => {
+  try {
+    const { kelas_id } = req.body;
+
+    if (!kelas_id) {
+      return res.status(400).json({ error: "kelas_id wajib diisi" });
+    }
+
+    const sql = `
+      SELECT  
+        k.nama AS nama_kelas,
+        pel.nama AS nama_pelajaran,
+        s.nama AS nama_santri,
+        p.rata_rata
+      FROM penilaian p
+      JOIN santri s ON p.santri_id = s.id
+      JOIN jadwal_guru_penguji j ON p.jadwal_id = j.id
+      JOIN pelajaran pel ON j.pelajaran_id = pel.id
+      JOIN kelas k ON j.kelas_id = k.id
+      WHERE j.kelas_id = ?
+    `;
+
+    const [rows] = await pool.query(sql, [kelas_id]);
+
+    // Proses data menjadi pivot
+    const rekap = {};
+
+    rows.forEach(row => {
+      const key = row.nama_santri;
+      if (!rekap[key]) {
+        rekap[key] = {
+          nama_kelas: row.nama_kelas,
+          nama_santri: row.nama_santri,
+          nilai: {}
+        };
+      }
+      rekap[key].nilai[row.nama_pelajaran] = row.rata_rata;
+    });
+
+    res.status(200).json(Object.values(rekap));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/jadwal-guru-penguji", async (req, res) => {
+  try {
+    const { guru_id } = req.body;
+
+    if (!guru_id) {
+      return res.status(400).json({ error: "guru_id wajib diisi" });
+    }
+
+    const sql = `
+      SELECT 
+        j.id AS jadwal_id,
+        pel.nama AS pelajaran_nama,
+        k.id AS kelas_id,
+        k.nama AS kelas_nama,
+        w.nama AS waktu_nama
+      FROM jadwal_guru_penguji j
+      JOIN pelajaran pel ON j.pelajaran_id = pel.id
+      JOIN kelas k ON j.kelas_id = k.id
+      JOIN waktu w ON j.waktu_id = w.id
+      WHERE j.guru_id = ?
+    `;
+
+    const [rows] = await pool.query(sql, [guru_id]);
+    res.status(200).json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+app.post("/santri-by-kelas", async (req, res) => {
+  try {
+    const { kelas_id } = req.body;
+
+    if (!kelas_id) {
+      return res.status(400).json({ error: "kelas_id wajib diisi" });
+    }
+
+    const sql = `
+      SELECT id, nama 
+      FROM santri 
+      WHERE kelas_id = ?
+    `;
+
+    const [rows] = await pool.query(sql, [kelas_id]);
+
+    res.status(200).json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/penilaian-by-santri", async (req, res) => {
+  try {
+    const { jadwal_id, santri_id } = req.body;
+
+    if (!jadwal_id || !santri_id) {
+      return res.status(400).json({ error: "jadwal_id dan santri_id wajib diisi" });
+    }
+
+    const sql = `
+      SELECT baris, makna, surah, pertanyaan 
+      FROM penilaian 
+      WHERE jadwal_id = ? AND santri_id = ?
+    `;
+
+    const [rows] = await pool.query(sql, [jadwal_id, santri_id]);
+
+    if (rows.length === 0) {
+      return res.status(200).json(null); // tidak ada penilaian
+    }
+
+    res.status(200).json(rows[0]); // kembalikan objek penilaian
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/penilaian", async (req, res) => {
+  try {
+    const { jadwal_id, santri_id, baris, makna, surah, pertanyaan } = req.body;
+
+    if (!jadwal_id || !santri_id) {
+      return res.status(400).json({ error: "jadwal_id dan santri_id wajib diisi" });
+    }
+
+    // Cek apakah data sudah ada
+    const [existingRows] = await pool.query(
+      `SELECT * FROM penilaian WHERE jadwal_id = ? AND santri_id = ?`,
+      [jadwal_id, santri_id]
+    );
+
+    if (existingRows.length > 0) {
+      // Data sudah ada → update sebagian
+      const current = existingRows[0];
+
+      const updatedBaris = baris !== undefined ? baris : current.baris;
+      const updatedMakna = makna !== undefined ? makna : current.makna;
+      const updatedSurah = surah !== undefined ? surah : current.surah;
+      const updatedPertanyaan = pertanyaan !== undefined ? pertanyaan : current.pertanyaan;
+
+      await pool.query(
+        `UPDATE penilaian 
+         SET baris = ?, makna = ?, surah = ?, pertanyaan = ? 
+         WHERE jadwal_id = ? AND santri_id = ?`,
+        [updatedBaris, updatedMakna, updatedSurah, updatedPertanyaan, jadwal_id, santri_id]
+      );
+    } else {
+      // Data belum ada → insert baru
+      await pool.query(
+        `INSERT INTO penilaian (jadwal_id, santri_id, baris, makna, surah, pertanyaan)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          jadwal_id,
+          santri_id,
+          baris ?? null,
+          makna ?? null,
+          surah ?? null,
+          pertanyaan ?? null,
+        ]
+      );
+    }
+
+    res.status(200).json({ message: "Penilaian berhasil disimpan." });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/fcm-token', async (req, res) => {
+  const { user_id, fcm_token, device_type } = req.body;
+
+  if (!user_id || !fcm_token || !device_type) {
+    return res.status(400).json({ message: 'user_id, fcm_token, dan device_type wajib diisi' });
+  }
+
+  try {
+    // Cek apakah token untuk user dan device_type sudah ada
+    const [rows] = await pool.query(
+      'SELECT id, fcm_token FROM fcm_tokens WHERE user_id = ? AND device_type = ?',
+      [user_id, device_type]
+    );
+
+    if (rows.length > 0) {
+      // Jika token berbeda, update token dan updated_at
+      if (rows[0].fcm_token !== fcm_token) {
+        await pool.query(
+          'UPDATE fcm_tokens SET fcm_token = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [fcm_token, rows[0].id]
+        );
+        return res.status(200).json({ message: 'FCM token berhasil diperbarui' });
+      } else {
+        // Token sama, tidak perlu update
+        return res.status(200).json({ message: 'FCM token sudah terbaru' });
+      }
+    } else {
+      // Insert token baru
+      await pool.query(
+        'INSERT INTO fcm_tokens (user_id, fcm_token, device_type) VALUES (?, ?, ?)',
+        [user_id, fcm_token, device_type]
+      );
+      return res.status(201).json({ message: 'FCM token berhasil disimpan' });
+    }
+  } catch (error) {
+    console.error('Error menyimpan FCM token:', error);
+    return res.status(500).json({ message: 'Terjadi kesalahan server' });
+  }
+});
+
 
 // Jalankan server
 app.listen(port, "0.0.0.0", () => {
