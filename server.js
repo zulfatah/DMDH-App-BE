@@ -2158,6 +2158,44 @@ app.get("/pelajaran", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+app.post("/leaderboard", async (req, res) => {
+  const { tanggal_awal, tanggal_akhir } = req.body;
+
+  if (!tanggal_awal || !tanggal_akhir) {
+    return res.status(400).json({ error: "Tanggal awal dan akhir wajib diisi." });
+  }
+
+  try {
+    const [rows] = await pool.query(`
+      SELECT 
+        g.nama AS nama_guru,
+        COUNT(DISTINCT CONCAT(
+          a.tanggal, '-', 
+          a.waktu_id, '-', 
+          CASE 
+            WHEN a.kelas_id IN (37, 40) THEN 'group_37_40'
+            WHEN a.kelas_id IN (38, 39, 41) THEN 'group_38_39_41'
+            ELSE a.kelas_id
+          END
+        )) AS total_ngajar
+      FROM 
+        absensi a
+      JOIN 
+        guru g ON a.guru_id = g.id
+      WHERE 
+        a.tanggal BETWEEN ? AND ?
+      GROUP BY 
+        g.nama
+      ORDER BY 
+        total_ngajar DESC
+    `, [tanggal_awal, tanggal_akhir]);
+
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 // Jalankan server
 app.listen(port, "0.0.0.0", () => {
   console.log(`Server running on http://0.0.0.0:${port}`);
