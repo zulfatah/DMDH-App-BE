@@ -576,7 +576,7 @@ app.get("/kelas", async (req, res) => {
 app.get("/santri", async (req, res) => {
   try {
     const [rows] = await pool.query(`
-      SELECT s.id, s.nama, s.kelas_id, k.nama AS kelas_nama 
+      SELECT s.id, s.nama, s.kelas_id, k.nama AS kelas_nama, s.status 
       FROM santri s
       JOIN kelas k ON s.kelas_id = k.id
     `);
@@ -588,14 +588,14 @@ app.get("/santri", async (req, res) => {
 
 app.post("/santri", async (req, res) => {
   try {
-    const { nama, kelas_id } = req.body;
+    const { nama, kelas_id, status } = req.body;
 
-    if (!nama || !kelas_id) {
-      return res.status(400).json({ error: "Nama dan kelas_id wajib diisi" });
+    if (!nama || !kelas_id || !status) {
+      return res.status(400).json({ error: "Nama dan kelas_id dan status wajib diisi" });
     }
 
-    const sql = "INSERT INTO santri (nama, kelas_id) VALUES (?, ?)";
-    const [result] = await pool.query(sql, [nama, kelas_id]);
+    const sql = "INSERT INTO santri (nama, kelas_id, status) VALUES (?, ?, ?)";
+    const [result] = await pool.query(sql, [nama, kelas_id, status]);
 
     res
       .status(201)
@@ -605,27 +605,30 @@ app.post("/santri", async (req, res) => {
   }
 });
 
-app.put("/santri/:id", async (req, res) => {
+app.put("/santri", async (req, res) => {
   try {
-    const { id } = req.params;
-    const { nama, kelas_id } = req.body;
+    const { nama, kelas_id, status,id } = req.body;
 
-    if (!nama || !kelas_id) {
-      return res.status(400).json({ error: "Nama dan kelas_id wajib diisi" });
+    // Validasi
+    if (!nama || !kelas_id || status === undefined) {
+      return res
+        .status(400)
+        .json({ error: "Nama, kelas_id, dan status wajib diisi" });
     }
 
-    const sql = "UPDATE santri SET nama = ?, kelas_id = ? WHERE id = ?";
-    const [result] = await pool.query(sql, [nama, kelas_id, id]);
+    const sql = "UPDATE santri SET nama = ?, kelas_id = ?, status = ? WHERE id = ?";
+    const [result] = await pool.query(sql, [nama, kelas_id, status, id]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: "Santri tidak ditemukan" });
     }
 
-    res.json({ message: "Santri berhasil diperbarui" });
+    res.json({ message: "Santri berhasil diupdate" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 app.delete("/santri/:id", async (req, res) => {
   try {
@@ -647,7 +650,7 @@ app.delete("/santri/:id", async (req, res) => {
 app.get("/guru", async (req, res) => {
   try {
     const [rows] = await pool.query(`
-      SELECT g.id, g.nama, g.user_id, u.username
+      SELECT g.id, g.nama, g.user_id, g.status, u.username, u.role
       FROM guru g
       JOIN users u ON g.user_id = u.id
     `);
@@ -659,7 +662,7 @@ app.get("/guru", async (req, res) => {
 
 app.post("/guru", async (req, res) => {
   try {
-    const { nama, username, guru_id } = req.body;
+    const { nama, username, guru_id, role, status } = req.body;
 
     if (!nama || !username || !guru_id) {
       return res.status(400).json({ error: "Nama, username, dan guru_id wajib diisi" });
@@ -668,11 +671,11 @@ app.post("/guru", async (req, res) => {
     const sql = `
       UPDATE guru g 
       JOIN users u ON g.user_id = u.id 
-      SET g.nama = ?, u.username = ? 
+      SET g.nama = ?, u.username = ?, u.role = ?, g.status = ? 
       WHERE g.id = ?
     `;
 
-    const [result] = await pool.query(sql, [nama, username, guru_id]);
+    const [result] = await pool.query(sql, [nama, username, role, status, guru_id]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: "Guru tidak ditemukan" });
