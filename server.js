@@ -6,6 +6,8 @@ const cors = require("cors");
 const moment = require("moment-hijri");
 const app = express();
 const port = process.env.PORT || 3002;
+const path = require('path');
+const uploadRoute = require('./upload');
 
 moment.locale("id");
 // Middleware
@@ -360,7 +362,7 @@ app.post("/api/absensi-harian", async (req, res) => {
       santri.id, 
       santri.nama
       FROM santri
-      WHERE kelas_id = ?`;
+      WHERE status = 1 AND kelas_id = ?`;
     const [santriRows] = await pool.query(sqlSantri, [kelas_id]);
 
     // Buat data absensi default (hadir = 0, izin = 0, dsb.)
@@ -2196,6 +2198,14 @@ app.post("/leaderboard", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// Middleware static untuk file
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// API route
+app.use('/api/upload', uploadRoute);
+
 // Jalankan server
 app.listen(port, "0.0.0.0", () => {
   console.log(`Server running on http://0.0.0.0:${port}`);
