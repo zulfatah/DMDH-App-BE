@@ -1088,34 +1088,53 @@ app.post("/absensi/bulanan", async (req, res) => {
     return res.status(400).json({ message: "Parameter tidak lengkap" });
   }
 
-  const query = `
-      SELECT a.*, s.nama AS nama_santri, DATE_FORMAT(a.tanggal, '%Y-%m-%d') AS tanggal_format
-      FROM absensi a
-      JOIN santri s ON a.santri_id = s.id
-      WHERE a.tanggal BETWEEN ? AND ?
-      AND a.kelas_id = ?
-      AND a.waktu_id = ?
-      ORDER BY a.tanggal, s.nama
+  const absensiQuery = `
+    SELECT a.*, s.nama AS nama_santri, DATE_FORMAT(a.tanggal, '%Y-%m-%d') AS tanggal_format
+    FROM absensi a
+    JOIN santri s ON a.santri_id = s.id
+    WHERE a.tanggal BETWEEN ? AND ?
+    AND a.kelas_id = ?
+    AND a.waktu_id = ?
+    ORDER BY a.tanggal, s.nama
+  `;
+
+  const keteranganQuery = `
+    SELECT DATE_FORMAT(tanggal, '%Y-%m-%d') AS tanggal, keterangan
+    FROM keterangan_pengajian
+    WHERE tanggal BETWEEN ? AND ?
+      AND kelas_id = ?
+      AND waktu_id = ?
   `;
 
   try {
-    const [rows] = await pool.query(query, [
+    const [absensiRows] = await pool.query(absensiQuery, [
       startDate,
       endDate,
       kelas_id,
       waktu_id,
     ]);
 
-    console.log("[DEBUG] Data absensi terambil:", rows.length, "records");
+    const [keteranganRows] = await pool.query(keteranganQuery, [
+      startDate,
+      endDate,
+      kelas_id,
+      waktu_id,
+    ]);
 
-    // Generate the full date range
+    console.log("[DEBUG] Data absensi:", absensiRows.length);
+    console.log("[DEBUG] Data keterangan:", keteranganRows.length);
+
     const tanggalList = generateTanggalRange(startDate, endDate);
-    console.log("[DEBUG] Tanggal range:", tanggalList);
+
+    const keteranganMap = {};
+    keteranganRows.forEach((row) => {
+      keteranganMap[row.tanggal] = row.keterangan;
+    });
 
     const rekap = {};
 
-    // Initialize rekap with all students and all dates set to "-"
-    rows.forEach((row) => {
+    // Inisialisasi rekap dengan semua santri & semua tanggal diisi "-"
+    absensiRows.forEach((row) => {
       const nama = row.nama_santri;
 
       if (!rekap[nama]) {
@@ -1125,19 +1144,26 @@ app.post("/absensi/bulanan", async (req, res) => {
           jumlah: { H: 0, S: 0, P: 0, I: 0, A: 0 },
         };
 
-        // Initialize all dates with "-"
         tanggalList.forEach((tgl) => {
           rekap[nama].tanggal[tgl] = "-";
         });
       }
     });
 
-    // Now fill in actual attendance data
-    rows.forEach((row) => {
+    // Tambahkan keterangan jika ada
+    Object.keys(rekap).forEach((nama) => {
+      tanggalList.forEach((tgl) => {
+        if (keteranganMap[tgl]) {
+          rekap[nama].tanggal[tgl] = `${keteranganMap[tgl]}`;
+        }
+      });
+    });
+
+    // Isi data absensi aktual
+    absensiRows.forEach((row) => {
       const tanggal = row.tanggal_format;
       const nama = row.nama_santri;
 
-      // Determine attendance status code
       let kode = "-";
       if (row.hadir) kode = "H";
       else if (row.izin) kode = "I";
@@ -1145,21 +1171,23 @@ app.post("/absensi/bulanan", async (req, res) => {
       else if (row.pulang) kode = "P";
       else if (row.alpa) kode = "A";
 
-      // Set attendance for this date
-      rekap[nama].tanggal[tanggal] = kode;
+      // Hanya timpa jika bukan keterangan
+      if (!rekap[nama].tanggal[tanggal].startsWith("K:")) {
+        rekap[nama].tanggal[tanggal] = kode;
+      }
 
-      // Update count for this status
-      if (kode !== "-") {
+      // Tambah jumlah jika bukan "-"
+      if (["H", "I", "S", "P", "A"].includes(kode)) {
         rekap[nama].jumlah[kode]++;
       }
     });
 
-    // Convert to final result array with all dates in the range
+    // Ubah ke array hasil akhir
     const finalResult = Object.values(rekap).map((santri) => {
       const result = {
         nama: santri.nama,
         ...tanggalList.reduce((acc, tgl) => {
-          acc[tgl] = santri.tanggal[tgl]; // Will be "-" if no attendance data
+          acc[tgl] = santri.tanggal[tgl];
           return acc;
         }, {}),
         jumlah_h: santri.jumlah.H,
@@ -1181,6 +1209,7 @@ app.post("/absensi/bulanan", async (req, res) => {
     });
   }
 });
+
 
 app.post("/absensi/bulanan/rekap", async (req, res) => {
   const { startDate, endDate, kelas_id } = req.body;
@@ -2198,6 +2227,73 @@ app.post("/leaderboard", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+app.post("/keterangan", async (req, res) => {
+  const { guru_id, kelas_id, waktu_id, tanggal, keterangan } = req.body;
+
+  if (!guru_id || !kelas_id || !waktu_id || !tanggal || !keterangan) {
+    return res.status(400).json({ message: "Semua field wajib diisi." });
+  }
+
+  try {
+    // Cek apakah data sudah ada
+    const [rows] = await pool.query(
+      `SELECT * FROM keterangan_pengajian 
+       WHERE guru_id = ? AND kelas_id = ? AND waktu_id = ? AND tanggal = ?`,
+      [guru_id, kelas_id, waktu_id, tanggal]
+    );
+
+    if (rows.length > 0) {
+      // Sudah ada -> update
+      await pool.query(
+        `UPDATE keterangan_pengajian 
+         SET keterangan = ? 
+         WHERE guru_id = ? AND kelas_id = ? AND waktu_id = ? AND tanggal = ?`,
+        [keterangan, guru_id, kelas_id, waktu_id, tanggal]
+      );
+
+      return res.json({ message: "Keterangan berhasil diperbarui." });
+    } else {
+      // Belum ada -> insert
+      await pool.query(
+        `INSERT INTO keterangan_pengajian (guru_id, kelas_id, waktu_id, tanggal, keterangan)
+         VALUES (?, ?, ?, ?, ?)`,
+        [guru_id, kelas_id, waktu_id, tanggal, keterangan]
+      );
+
+      return res.json({ message: "Keterangan berhasil disimpan." });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Terjadi kesalahan saat menyimpan data." });
+  }
+});
+
+app.post("/keterangan-pengajian", async (req, res) => {
+  const { tanggal, kelas_id, waktu_id } = req.body;
+
+  if (!tanggal || !kelas_id || !waktu_id) {
+    return res.status(400).json({ message: 'Parameter tanggal, kelas_id, dan waktu_id diperlukan.' });
+  }
+
+  try {
+    const [row] = await pool.query(
+      `SELECT keterangan FROM keterangan_pengajian 
+       WHERE tanggal = ? AND kelas_id = ? AND waktu_id = ?`,
+      [tanggal, kelas_id, waktu_id]
+    );
+
+    if (row.length > 0) {
+      res.json({ keterangan: row[0].keterangan });
+    } else {
+      res.json({ keterangan: null }); // Tidak ada keterangan
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Terjadi kesalahan server.' });
+  }
+});
+
 
 // Middleware static untuk file
 
