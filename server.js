@@ -6,8 +6,8 @@ const cors = require("cors");
 const moment = require("moment-hijri");
 const app = express();
 const port = process.env.PORT || 3002;
-const path = require('path');
-const uploadRoute = require('./upload');
+const path = require("path");
+const uploadRoute = require("./upload");
 
 moment.locale("id");
 // Middleware
@@ -123,11 +123,16 @@ app.post("/change-password", async (req, res) => {
     );
 
     if (userRows.length === 0) {
-      return res.status(400).json({ message: "Username atau password lama salah!" });
+      return res
+        .status(400)
+        .json({ message: "Username atau password lama salah!" });
     }
 
     // Update password baru
-    await pool.query("UPDATE users SET password = ? WHERE username = ?", [newPassword, username]);
+    await pool.query("UPDATE users SET password = ? WHERE username = ?", [
+      newPassword,
+      username,
+    ]);
 
     res.json({ message: "Password berhasil diubah!" });
   } catch (err) {
@@ -150,16 +155,15 @@ app.get("/jadwal-ngajar", async (req, res) => {
 
     const { user_id, username, guru_id } = decoded; // ambil data dari payload token
 
-      // 1. Ambil nama guru dari tabel guru
-      const [guruRows] = await pool.query(
-        `SELECT nama FROM guru WHERE id = ?`,
-        [guru_id]
-      );
-      const guruNama = guruRows.length > 0 ? guruRows[0].nama : null;
-  
-      // 2. Ambil jadwal ngajar (tanpa join ke guru)
-      const [jadwalRows] = await pool.query(
-        `SELECT 
+    // 1. Ambil nama guru dari tabel guru
+    const [guruRows] = await pool.query(`SELECT nama FROM guru WHERE id = ?`, [
+      guru_id,
+    ]);
+    const guruNama = guruRows.length > 0 ? guruRows[0].nama : null;
+
+    // 2. Ambil jadwal ngajar (tanpa join ke guru)
+    const [jadwalRows] = await pool.query(
+      `SELECT 
             j.id AS jadwal_id,
             j.kelas_id,
             j.waktu_id,
@@ -169,8 +173,8 @@ app.get("/jadwal-ngajar", async (req, res) => {
          JOIN kelas k ON j.kelas_id = k.id
          JOIN waktu w ON j.waktu_id = w.id
          WHERE j.guru_id = ?`,
-        [guru_id]
-      );
+      [guru_id]
+    );
 
     res.json({
       message: "Login berhasil", // sengaja samain
@@ -593,7 +597,9 @@ app.post("/santri", async (req, res) => {
     const { nama, kelas_id, status } = req.body;
 
     if (!nama || !kelas_id || !status) {
-      return res.status(400).json({ error: "Nama dan kelas_id dan status wajib diisi" });
+      return res
+        .status(400)
+        .json({ error: "Nama dan kelas_id dan status wajib diisi" });
     }
 
     const sql = "INSERT INTO santri (nama, kelas_id, status) VALUES (?, ?, ?)";
@@ -609,7 +615,7 @@ app.post("/santri", async (req, res) => {
 
 app.put("/santri", async (req, res) => {
   try {
-    const { nama, kelas_id, status,id } = req.body;
+    const { nama, kelas_id, status, id } = req.body;
 
     // Validasi
     if (!nama || !kelas_id || status === undefined) {
@@ -618,7 +624,8 @@ app.put("/santri", async (req, res) => {
         .json({ error: "Nama, kelas_id, dan status wajib diisi" });
     }
 
-    const sql = "UPDATE santri SET nama = ?, kelas_id = ?, status = ? WHERE id = ?";
+    const sql =
+      "UPDATE santri SET nama = ?, kelas_id = ?, status = ? WHERE id = ?";
     const [result] = await pool.query(sql, [nama, kelas_id, status, id]);
 
     if (result.affectedRows === 0) {
@@ -630,7 +637,6 @@ app.put("/santri", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 
 app.delete("/santri/:id", async (req, res) => {
   try {
@@ -667,7 +673,9 @@ app.post("/guru", async (req, res) => {
     const { nama, username, guru_id, role, status } = req.body;
 
     if (!nama || !username || !guru_id) {
-      return res.status(400).json({ error: "Nama, username, dan guru_id wajib diisi" });
+      return res
+        .status(400)
+        .json({ error: "Nama, username, dan guru_id wajib diisi" });
     }
 
     const sql = `
@@ -677,7 +685,13 @@ app.post("/guru", async (req, res) => {
       WHERE g.id = ?
     `;
 
-    const [result] = await pool.query(sql, [nama, username, role, status, guru_id]);
+    const [result] = await pool.query(sql, [
+      nama,
+      username,
+      role,
+      status,
+      guru_id,
+    ]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: "Guru tidak ditemukan" });
@@ -689,6 +703,82 @@ app.post("/guru", async (req, res) => {
   }
 });
 
+app.post("/gurubyid", async (req, res) => {
+  const { id } = req.body;
+
+  if (!id) {
+    return res.status(400).json({ error: "ID tidak boleh kosong" });
+  }
+
+  const sql = `
+    SELECT guru.nama, guru.notlpn, guru.alamat, users.username
+    FROM guru
+    INNER JOIN users ON guru.user_id = users.id
+    WHERE guru.id = ?
+  `;
+
+  try {
+    const [results] = await pool.query(sql, [id]);
+
+    if (results.length === 0) {
+      return res.status(404).json({ message: "Guru tidak ditemukan" });
+    }
+
+    res.json(results[0]);
+  } catch (err) {
+    console.error("Query error:", err);
+    res.status(500).json({ error: "Terjadi kesalahan saat mengambil data" });
+  }
+});
+
+
+app.put('/gurubyid', async (req, res) => {
+  const { id, nama, notlpn, alamat, username } = req.body;
+
+  if (!id || !nama || !notlpn || !alamat || !username) {
+    return res.status(400).json({ error: 'Semua data harus diisi' });
+  }
+
+  try {
+    const connection = await pool.getConnection();
+
+    try {
+      // Ambil user_id dari guru
+      const [guruRows] = await connection.query(
+        'SELECT user_id FROM guru WHERE id = ?',
+        [id]
+      );
+
+      if (guruRows.length === 0) {
+        return res.status(404).json({ error: 'Data guru tidak ditemukan' });
+      }
+
+      const user_id = guruRows[0].user_id;
+
+      // Jalankan update guru
+      await connection.query(
+        'UPDATE guru SET nama = ?, notlpn = ?, alamat = ? WHERE id = ?',
+        [nama, notlpn, alamat, id]
+      );
+
+      // Jalankan update username pada tabel users
+      await connection.query(
+        'UPDATE users SET username = ? WHERE id = ?',
+        [username, user_id]
+      );
+
+      res.status(200).json({ message: 'Data berhasil diupdate' });
+    } finally {
+      connection.release(); // pastikan koneksi dilepas
+    }
+  } catch (err) {
+    console.error('Error saat update guru:', err);
+    res.status(500).json({ error: 'Terjadi kesalahan pada server' });
+  }
+});
+
+
+
 app.post("/guru/add", async (req, res) => {
   try {
     const { nama, username, password, role } = req.body;
@@ -698,7 +788,8 @@ app.post("/guru/add", async (req, res) => {
     }
 
     // Insert ke tabel users
-    const sqlUser = "INSERT INTO users (username, password, role) VALUES (?, ?, ?)";
+    const sqlUser =
+      "INSERT INTO users (username, password, role) VALUES (?, ?, ?)";
     const [resultUser] = await pool.query(sqlUser, [username, password, role]);
 
     const userId = resultUser.insertId;
@@ -709,7 +800,7 @@ app.post("/guru/add", async (req, res) => {
 
     res.status(201).json({
       message: "Guru berhasil ditambahkan",
-      userId: userId
+      userId: userId,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -835,18 +926,20 @@ app.post("/jadwal-ngajar/update", async (req, res) => {
     const [result] = await pool.query(sql, [kelas_id, guru_id, waktu_id, id]);
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "Jadwal tidak ditemukan atau tidak ada perubahan" });
+      return res
+        .status(404)
+        .json({ error: "Jadwal tidak ditemukan atau tidak ada perubahan" });
     }
 
     res.status(200).json({
       message: "Jadwal berhasil diperbarui",
     });
   } catch (err) {
-    res.status(500).json({ error: "Terjadi kesalahan pada server: " + err.message });
+    res
+      .status(500)
+      .json({ error: "Terjadi kesalahan pada server: " + err.message });
   }
 });
-
-
 
 // DELETE - Hapus Data Jadwal
 app.delete("/jadwal-ngajar/:id", async (req, res) => {
@@ -1209,7 +1302,6 @@ app.post("/absensi/bulanan", async (req, res) => {
     });
   }
 });
-
 
 app.post("/absensi/bulanan/rekap", async (req, res) => {
   const { startDate, endDate, kelas_id } = req.body;
@@ -1908,13 +2000,13 @@ WHERE s.kelas_id = ?
     // Proses data menjadi pivot
     const rekap = {};
 
-    rows.forEach(row => {
+    rows.forEach((row) => {
       const key = row.nama_santri;
       if (!rekap[key]) {
         rekap[key] = {
           nama_kelas: row.nama_kelas,
           nama_santri: row.nama_santri,
-          nilai: {}
+          nilai: {},
         };
       }
       rekap[key].nilai[row.nama_pelajaran] = row.rata_rata;
@@ -1955,7 +2047,6 @@ app.post("/jadwal-guru-penguji", async (req, res) => {
   }
 });
 
-
 app.post("/santri-by-kelas", async (req, res) => {
   try {
     const { kelas_id } = req.body;
@@ -1983,7 +2074,9 @@ app.post("/penilaian-by-santri", async (req, res) => {
     const { jadwal_id, santri_id } = req.body;
 
     if (!jadwal_id || !santri_id) {
-      return res.status(400).json({ error: "jadwal_id dan santri_id wajib diisi" });
+      return res
+        .status(400)
+        .json({ error: "jadwal_id dan santri_id wajib diisi" });
     }
 
     const sql = `
@@ -2009,7 +2102,9 @@ app.post("/penilaian", async (req, res) => {
     const { jadwal_id, santri_id, baris, makna, surah, pertanyaan } = req.body;
 
     if (!jadwal_id || !santri_id) {
-      return res.status(400).json({ error: "jadwal_id dan santri_id wajib diisi" });
+      return res
+        .status(400)
+        .json({ error: "jadwal_id dan santri_id wajib diisi" });
     }
 
     // Cek apakah data sudah ada
@@ -2025,13 +2120,21 @@ app.post("/penilaian", async (req, res) => {
       const updatedBaris = baris !== undefined ? baris : current.baris;
       const updatedMakna = makna !== undefined ? makna : current.makna;
       const updatedSurah = surah !== undefined ? surah : current.surah;
-      const updatedPertanyaan = pertanyaan !== undefined ? pertanyaan : current.pertanyaan;
+      const updatedPertanyaan =
+        pertanyaan !== undefined ? pertanyaan : current.pertanyaan;
 
       await pool.query(
         `UPDATE penilaian 
          SET baris = ?, makna = ?, surah = ?, pertanyaan = ? 
          WHERE jadwal_id = ? AND santri_id = ?`,
-        [updatedBaris, updatedMakna, updatedSurah, updatedPertanyaan, jadwal_id, santri_id]
+        [
+          updatedBaris,
+          updatedMakna,
+          updatedSurah,
+          updatedPertanyaan,
+          jadwal_id,
+          santri_id,
+        ]
       );
     } else {
       // Data belum ada → insert baru
@@ -2055,17 +2158,19 @@ app.post("/penilaian", async (req, res) => {
   }
 });
 
-app.post('/fcm-token', async (req, res) => {
+app.post("/fcm-token", async (req, res) => {
   const { user_id, fcm_token, device_type } = req.body;
 
   if (!user_id || !fcm_token || !device_type) {
-    return res.status(400).json({ message: 'user_id, fcm_token, dan device_type wajib diisi' });
+    return res
+      .status(400)
+      .json({ message: "user_id, fcm_token, dan device_type wajib diisi" });
   }
 
   try {
     // Cek apakah token untuk user dan device_type sudah ada
     const [rows] = await pool.query(
-      'SELECT id, fcm_token FROM fcm_tokens WHERE user_id = ? AND device_type = ?',
+      "SELECT id, fcm_token FROM fcm_tokens WHERE user_id = ? AND device_type = ?",
       [user_id, device_type]
     );
 
@@ -2073,25 +2178,27 @@ app.post('/fcm-token', async (req, res) => {
       // Jika token berbeda, update token dan updated_at
       if (rows[0].fcm_token !== fcm_token) {
         await pool.query(
-          'UPDATE fcm_tokens SET fcm_token = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          "UPDATE fcm_tokens SET fcm_token = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
           [fcm_token, rows[0].id]
         );
-        return res.status(200).json({ message: 'FCM token berhasil diperbarui' });
+        return res
+          .status(200)
+          .json({ message: "FCM token berhasil diperbarui" });
       } else {
         // Token sama, tidak perlu update
-        return res.status(200).json({ message: 'FCM token sudah terbaru' });
+        return res.status(200).json({ message: "FCM token sudah terbaru" });
       }
     } else {
       // Insert token baru
       await pool.query(
-        'INSERT INTO fcm_tokens (user_id, fcm_token, device_type) VALUES (?, ?, ?)',
+        "INSERT INTO fcm_tokens (user_id, fcm_token, device_type) VALUES (?, ?, ?)",
         [user_id, fcm_token, device_type]
       );
-      return res.status(201).json({ message: 'FCM token berhasil disimpan' });
+      return res.status(201).json({ message: "FCM token berhasil disimpan" });
     }
   } catch (error) {
-    console.error('Error menyimpan FCM token:', error);
-    return res.status(500).json({ message: 'Terjadi kesalahan server' });
+    console.error("Error menyimpan FCM token:", error);
+    return res.status(500).json({ message: "Terjadi kesalahan server" });
   }
 });
 
@@ -2127,7 +2234,11 @@ app.post("/jadwal-penguji", async (req, res) => {
 
     // Validasi lengkap
     if (!kelas_id || !guru_id || !waktu_id || !pelajaran_id) {
-      return res.status(400).json({ error: "Semua field (kelas, guru, waktu, pelajaran) harus diisi" });
+      return res
+        .status(400)
+        .json({
+          error: "Semua field (kelas, guru, waktu, pelajaran) harus diisi",
+        });
     }
 
     const sql = `
@@ -2135,24 +2246,23 @@ app.post("/jadwal-penguji", async (req, res) => {
       (kelas_id, guru_id, waktu_id, pelajaran_id) 
       VALUES (?, ?, ?, ?)
     `;
-    
+
     const [result] = await pool.query(sql, [
       kelas_id,
       guru_id,
       waktu_id,
-      pelajaran_id
+      pelajaran_id,
     ]);
 
     res.status(201).json({
       message: "Jadwal berhasil ditambahkan",
-      insertedId: result.insertId
+      insertedId: result.insertId,
     });
   } catch (err) {
     console.error("Error insert jadwal:", err);
     res.status(500).json({ error: "Gagal menambahkan jadwal" });
   }
 });
-
 
 app.post("/jadwal-penguji/update", async (req, res) => {
   try {
@@ -2164,17 +2274,27 @@ app.post("/jadwal-penguji/update", async (req, res) => {
 
     const sql =
       "UPDATE jadwal_guru_penguji SET kelas_id = ?, guru_id = ?, waktu_id = ?, pelajaran_id = ? WHERE id = ?";
-    const [result] = await pool.query(sql, [kelas_id, guru_id, waktu_id, pelajaran_id, id]);
+    const [result] = await pool.query(sql, [
+      kelas_id,
+      guru_id,
+      waktu_id,
+      pelajaran_id,
+      id,
+    ]);
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "Jadwal tidak ditemukan atau tidak ada perubahan" });
+      return res
+        .status(404)
+        .json({ error: "Jadwal tidak ditemukan atau tidak ada perubahan" });
     }
 
     res.status(200).json({
       message: "Jadwal berhasil diperbarui",
     });
   } catch (err) {
-    res.status(500).json({ error: "Terjadi kesalahan pada server: " + err.message });
+    res
+      .status(500)
+      .json({ error: "Terjadi kesalahan pada server: " + err.message });
   }
 });
 
@@ -2194,11 +2314,14 @@ app.post("/leaderboard", async (req, res) => {
   const { tanggal_awal, tanggal_akhir } = req.body;
 
   if (!tanggal_awal || !tanggal_akhir) {
-    return res.status(400).json({ error: "Tanggal awal dan akhir wajib diisi." });
+    return res
+      .status(400)
+      .json({ error: "Tanggal awal dan akhir wajib diisi." });
   }
 
   try {
-    const [rows] = await pool.query(`
+    const [rows] = await pool.query(
+      `
       SELECT 
         g.nama AS nama_guru,
         COUNT(DISTINCT CONCAT(
@@ -2220,7 +2343,9 @@ app.post("/leaderboard", async (req, res) => {
         g.nama
       ORDER BY 
         total_ngajar DESC
-    `, [tanggal_awal, tanggal_akhir]);
+    `,
+      [tanggal_awal, tanggal_akhir]
+    );
 
     res.json(rows);
   } catch (err) {
@@ -2273,7 +2398,11 @@ app.post("/keterangan-pengajian", async (req, res) => {
   const { tanggal, kelas_id, waktu_id } = req.body;
 
   if (!tanggal || !kelas_id || !waktu_id) {
-    return res.status(400).json({ message: 'Parameter tanggal, kelas_id, dan waktu_id diperlukan.' });
+    return res
+      .status(400)
+      .json({
+        message: "Parameter tanggal, kelas_id, dan waktu_id diperlukan.",
+      });
   }
 
   try {
@@ -2290,17 +2419,16 @@ app.post("/keterangan-pengajian", async (req, res) => {
     }
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Terjadi kesalahan server.' });
+    res.status(500).json({ message: "Terjadi kesalahan server." });
   }
 });
 
-
 // Middleware static untuk file
 
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // API route
-app.use('/api/upload', uploadRoute);
+app.use("/api/upload", uploadRoute);
 
 // Jalankan server
 app.listen(port, "0.0.0.0", () => {

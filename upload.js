@@ -16,7 +16,7 @@ if (!fs.existsSync(uploadPath)) {
 const storage = multer.memoryStorage(); // simpan di memori sementara
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // max 2MB
+  limits: { fileSize: 10 * 1024 * 1024 }, 
   fileFilter: (req, file, cb) => {
     const isImage = file.mimetype.startsWith('image/');
     cb(null, isImage);
