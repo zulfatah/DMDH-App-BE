@@ -2323,6 +2323,7 @@ app.post("/leaderboard", async (req, res) => {
     const [rows] = await pool.query(
       `
       SELECT 
+        g.id AS guru_id,
         g.nama AS nama_guru,
         COUNT(DISTINCT CONCAT(
           a.tanggal, '-', 
@@ -2340,7 +2341,7 @@ app.post("/leaderboard", async (req, res) => {
       WHERE 
         a.tanggal BETWEEN ? AND ?
       GROUP BY 
-        g.nama
+        g.id, g.nama
       ORDER BY 
         total_ngajar DESC
     `,
