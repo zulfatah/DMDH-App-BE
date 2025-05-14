@@ -496,14 +496,18 @@ app.post("/absensi/alpa", async (req, res) => {
   }
 
   const query = `
-      SELECT santri.nama AS santri_nama, 
-             kelas.nama AS kelas_nama, 
-             waktu.nama AS waktu_nama 
-      FROM absensi 
-      JOIN santri ON absensi.santri_id = santri.id 
-      JOIN kelas ON absensi.kelas_id = kelas.id 
-      JOIN waktu ON absensi.waktu_id = waktu.id 
-      WHERE absensi.alpa = 1 AND absensi.tanggal = ?`;
+      SELECT 
+  santri.nama AS santri_nama, 
+  kelas.nama AS kelas_nama, 
+  waktu.nama AS waktu_nama 
+FROM absensi 
+JOIN santri ON absensi.santri_id = santri.id 
+JOIN kelas ON absensi.kelas_id = kelas.id 
+JOIN waktu ON absensi.waktu_id = waktu.id 
+WHERE absensi.alpa = 1 
+  AND absensi.tanggal = ? 
+ORDER BY kelas.nama ASC, santri.nama ASC;
+`;
 
   try {
     const [results] = await pool.query(query, [tanggal]);
